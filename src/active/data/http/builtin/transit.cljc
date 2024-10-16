@@ -99,11 +99,11 @@
     (lens/xmap (fn to-realm [raw]
                  (when (not (and (vector? raw)
                                  (= 2 (count raw))))
-                   (throw (format/runtime-error (str "Expected a vector of length 2 as the union representation, but got: " raw) raw)))
+                   (throw (format/format-error "Expected a vector of length 2 as the union representation" raw)))
                  (let [[idx v] raw]
                    (if-let [[_realm lens] (get tags-realms-lenses-map idx)]
                      (lens/yank v lens)
-                     (throw (format/runtime-error (str "Unexected union tag " idx) v)))))
+                     (throw (format/format-error "Unexpected union tag" idx)))))
                (let [try-all (->> tags-realms-lenses-map
                                   (map (fn [[idx [realm lens]]]
                                          (fn [value]
@@ -112,7 +112,7 @@
                                   (apply some-fn))]
                  (fn from-realm [v]
                    (or (try-all v)
-                       (throw (format/runtime-error "Value not contained in union realm." v))))))))
+                       (throw (format/format-error "Value not contained in union realm" v))))))))
 
 ;; (defn flat-union ... just try them all)
 #_(defn- flat-union [realms recurse]
@@ -121,13 +121,13 @@
       (lens/xmap (fn to-realm [v]
                    (let [res (reduce (fn [_ lens]
                                        (try (reduced [(lens/yank v lens)])
-                                          ;; TODO: runtime-error
+                                          ;; TODO: format-error
                                             (catch #?(:clj Exception :cljs :default) e
                                               nil)))
                                      nil
                                      lenses)]
                      (if (nil? res)
-                       (throw ...) ;; TODO runtime-error
+                       (throw ...) ;; TODO format-error
                        (first res))))
                  (fn from-realm [v]
                    (let [res (reduce (fn [_ lens]
@@ -152,8 +152,8 @@
     (lens/xmap (fn [edn]
                  (when (not= (count (realm-inspection/record-realm-fields realm))
                              (count edn))
-                   (throw (format/runtime-error (str "Expected " (count (realm-inspection/record-realm-fields realm)) " values for record realm, but only got " (count edn))
-                                                edn)))
+                   (throw (format/format-error (str "Expected " (count (realm-inspection/record-realm-fields realm)) " values for record realm, but only got " (count edn))
+                                               edn)))
                  (let [vals (map (fn [v lens]
                                    (lens/yank v lens))
                                  edn
@@ -175,11 +175,11 @@
     (transit/tagged-value (record-realm-name ...)
                           {field-name => (recurse ...) value}))
 
-(defn- ensure-transit [realm pred lens]
+(defn- ensure-transit [_realm pred lens]
   (lens/xmap (fn to-realm [v]
                ;; TODO: generate more helpful messages.
                (when-not (pred v)
-                 (throw (format/runtime-error (str "Unexpected value: " v) v)))
+                 (throw (format/format-error "Unexpected value" v)))
                (lens/yank v lens))
              (fn from-realm [v]
                (lens/shove nil lens v))))
@@ -195,7 +195,8 @@
                                        (transient {}) v)))))
 
 (defn- vector-lens [lenses]
-  (lens/>> (lens/default []) ;; at-index generates lists otherwise
+  ;; TODO: there are probably more efficient ways
+  (lens/>> (lens/default (vec (repeat (count lenses) nil)))
            (lens/pattern (->> lenses
                               (map-indexed (fn [idx lens]
                                              (lens/>> (lens/at-index idx) lens)))
@@ -206,10 +207,10 @@
     (lens/xmap (fn to-realm [v]
                  ;; TODO: generate more helpful messages.
                  (when-not (map? v)
-                   (throw (format/runtime-error (str "Unexpected value: " v) v)))
+                   (throw (format/format-error "Not a map" v)))
                  (doseq [[k _v] v]
                    (when-not (expected-key? k)
-                     (throw (format/runtime-error (str "Unexpected key in map: " k) k))))
+                     (throw (format/format-error "Unexpected key in map" k))))
                  (lens/yank v lens))
                (fn from-realm [v]
                  (lens/shove nil lens v)))))

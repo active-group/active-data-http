@@ -29,8 +29,8 @@
     (t/is (vector? (core/translate-to realm sut/transit-format t)))
     (t/is (= v (core/translate-to realm sut/transit-format t)))
 
-    (t/is (format/runtime-error? (try (core/translate-to realm sut/transit-format :foo)
-                                      (catch #?(:clj Exception :cljs :default) e e))))))
+    (t/is (format/format-error? (try (core/translate-to realm sut/transit-format :foo)
+                                     (catch #?(:clj Exception :cljs :default) e e))))))
 
 (r/def-record rec-ab
   [rec-a :- realm/string
