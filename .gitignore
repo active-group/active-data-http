@@ -1,0 +1,9 @@
+.dir-locals.el
+.lein-failures
+target
+.clj-kondo/.cache
+.clj-kondo/imports
+.lsp/.cache
+.shadow-cljs
+node_modules
+out
