@@ -30,7 +30,7 @@
                                                             {}
                                                             froms)))))})))
 
-(defn- wrap-response-handler [format response-realm]
+(defn response-wrapper [format response-realm]
   (let [to (core/translator-to response-realm format)]
     (fn [handler]
       (when handler
@@ -41,14 +41,6 @@
     (apply f (reverse args))))
 
 (defn prepare-use-format [request body-format & {string-format :strings}]
-  (let [string-format (or string-format common/default-string-format)]
-    (cond-> request
-      ;; Note: not sure if putting it at the end or the beginning of the interceptors list is 'correct'
-      (contains? request :realm) (update :interceptors (flip cons) (request-body-interceptor body-format (:realm request)))
-      (contains? request :params-realms) (update :interceptors (flip cons) (request-query-interceptor string-format (:params-realms request)))
-      true (dissoc :realm :params-realms))))
-
-(defn use-format [request body-format & {string-format :strings}]
   ;; Note: if :format and :response-format are not set in the request,
   ;; the request format defaults to :transit, and the response format
   ;; defaults to an auto-detection; so the realm-format would have to
@@ -63,16 +55,24 @@
   ;; explicitly in ajax.core; can't easily convert them using
   ;; string-format.
 
-  ;; Note: this can all be done before the actual :params/:body is
-  ;; present in the request; that can be more efficient than doing
-  ;; is for each actual request.
+  (let [string-format (or string-format common/default-string-format)]
+    (cond-> request
+      ;; Note: not sure if putting it at the end or the beginning of the interceptors list is 'correct'
+      (contains? request :realm) (update :interceptors (flip cons) (request-body-interceptor body-format (:realm request)))
+      (contains? request :params-realms) (update :interceptors (flip cons) (request-query-interceptor string-format (:params-realms request)))
+      true (dissoc :realm :params-realms))))
 
-  ;; Note: we could split request and response body formats?
+(defn wrap-handler [request body-format]
   (cond-> request
-    ;; Note: prepare-use-format doesn't hurt to do again
-    true (prepare-use-format body-format :strings string-format)
-    (contains? request :response-realm) (update :handler (wrap-response-handler body-format (:response-realm request)))
+    (contains? request :response-realm) (update :handler (response-wrapper body-format (:response-realm request)))
     true (dissoc :response-realm)))
+
+(defn use-format [request body-format & {string-format :strings}]
+  ;; Note: we could split request and response body formats?
+  (-> request
+    ;; Note: prepare-use-format doesn't hurt to do again
+      (prepare-use-format body-format :strings string-format)
+      (wrap-handler body-format)))
 
 (defn prepare-use-transit-format [request body-format & opts]
   (as-> request $
@@ -84,4 +84,4 @@
 (defn use-transit-format [request body-format & opts]
   (as-> request $
     (apply prepare-use-transit-format $ body-format opts)
-    (apply use-format $ body-format opts)))
+    (apply wrap-handler $ body-format opts)))

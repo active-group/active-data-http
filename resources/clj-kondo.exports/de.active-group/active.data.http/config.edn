@@ -1,0 +1,1 @@
+{:hooks {:analyze-call {active.data.http.rpc/defn-rpc hooks.active-data-http/defn-rpc}}}

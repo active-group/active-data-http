@@ -75,7 +75,7 @@
 (defn realm-coercion
   "Returns a reitit coercion based on realms and the given realm formatter."
   ;; TODO: more docstring
-  ;; TODO: coercion comes after parsing (json, transit, something else); clarify that relationship.
+  ;; Note: coercion comes after parsing (json, transit, something else)
   [body-format & {string-format :strings}]
   ;; see https://github.com/metosin/reitit/blob/ff99ab3ff929ca1b5fd7446d72d1a6eb07668795/modules/reitit-core/src/reitit/coercion.cljc#L39
   ;; for type/open/keywordize

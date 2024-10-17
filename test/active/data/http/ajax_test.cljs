@@ -6,7 +6,7 @@
             [active.data.realm :as realm]
             [active.clojure.lens :as lens]
             [clojure.string :as string]
-            [clojure.test :as t]
+            [clojure.test :as t :include-macros true]
             [cognitect.transit :as ctransit]
             [ajax.protocols]))
 

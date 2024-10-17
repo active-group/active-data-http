@@ -2,8 +2,8 @@
   (:require [active.data.http.builtin :as sut]
             [active.data.translate.core :as core]
             [active.data.realm :as realm]
-            [active.data.record :as r]
-            [clojure.test :as t]
+            [active.data.record :as r #?@(:cljs [:include-macros true])]
+            [clojure.test :as t #?@(:cljs [:include-macros true])]
             [active.data.translate.format :as format]))
 
 ;; TODO: clojurescript. and interop between clj and cljs (via transit values)

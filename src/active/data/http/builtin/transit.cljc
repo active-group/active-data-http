@@ -150,6 +150,8 @@
                       (realm-inspection/record-realm-fields realm))
         constr (realm-inspection/record-realm-constructor realm)]
     (lens/xmap (fn [edn]
+                 (when-not (vector? edn)
+                   (throw (format/format-error "Expected a vector for record realm" edn)))
                  (when (not= (count (realm-inspection/record-realm-fields realm))
                              (count edn))
                    (throw (format/format-error (str "Expected " (count (realm-inspection/record-realm-fields realm)) " values for record realm, but only got " (count edn))
