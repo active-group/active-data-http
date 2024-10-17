@@ -1,4 +1,4 @@
-(ns active.data.http.builtin.transit
+(ns active.data.http.formats.transit
   (:require [active.data.translate.format :as format]
             [active.data.realm :as realm]
             [active.data.realm.inspection :as realm-inspection]
@@ -217,7 +217,7 @@
                (fn from-realm [v]
                  (lens/shove nil lens v)))))
 
-(defn extended [realm]
+(defn- extended [realm]
   ;; Note: this does some checks on the transit values that are read,
   ;; but those checks only guarantee that no information is lost/silently dropped.
   ;; The translated values may still not be 'contained' in the target
@@ -317,3 +317,22 @@
 
       :else
       (throw (format/unsupported-exn realm)))))
+
+(def ^{:doc "Translates values described by a realm to values usable by transit. The defaults cover most realms."} transit-format
+  ;; Note: use this only when you are ok with the coupling that this introduces.
+
+  ;; Coupling can for example be
+  ;; - between producer and consumer code of the transit values, if
+  ;;   they are developed independently
+  ;; - between past and future versions of the code, if transit values
+  ;;   are written to databases, or if producer and consumer can have different
+  ;;   versions of the code.
+  ;;
+  ;; To prevent that, define translators for every realm that you
+  ;; expect to change over time, or all of them to be sure. Then make
+  ;; those definitions forwards/backwards-compatible to the extend possible or
+  ;; needed, or expect different versions of the data.
+
+  ;; TODO: offer checked/unchecked versions
+  (format/format ::transit
+                 extended))

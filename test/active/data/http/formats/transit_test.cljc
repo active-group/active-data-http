@@ -1,5 +1,5 @@
-(ns active.data.http.builtin-test
-  (:require [active.data.http.builtin :as sut]
+(ns active.data.http.formats.transit-test
+  (:require [active.data.http.formats.transit :as sut]
             [active.data.translate.core :as core]
             [active.data.realm :as realm]
             [active.data.record :as r #?@(:cljs [:include-macros true])]

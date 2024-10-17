@@ -1,10 +1,10 @@
 (ns active.data.http.rpc
   (:require [active.data.http.rpc.common :as common]
-            [active.data.http.builtin :as builtin]))
+            [active.data.http.formats.transit :as transit]))
 
 (defn context [path & {realm-format :format underlying :underlying-format caller :caller}]
   ;; Note: for now we expect the format to support common.request/response (could add that explicitly if needed)
-  (common/context {common/context-format (or realm-format builtin/transit-format)
+  (common/context {common/context-format (or realm-format transit/transit-format)
                    common/context-underlying-format (or underlying :transit)
                    common/context-path path
                    ;; e.g. pass active.data.http.rpc.reacl-c/caller as the caller for cljs (default nil to not have the depedency)
