@@ -217,7 +217,7 @@
                (fn from-realm [v]
                  (lens/shove nil lens v)))))
 
-(defn- extended [realm]
+(defn basic [realm]
   ;; Note: this does some checks on the transit values that are read,
   ;; but those checks only guarantee that no information is lost/silently dropped.
   ;; The translated values may still not be 'contained' in the target
@@ -235,9 +235,7 @@
       (realm-inspection/named? realm)
       (recurse (realm-inspection/named-realm-realm realm))
 
-      (realm-inspection/union? realm)
-      ;; or flat-union? flat-union has a smaller representation, but will have less performance.
-      (tagged-union-lens (realm-inspection/union-realm-realms realm) recurse)
+      ;; (realm-inspection/union? realm) ;; or flat-union? try them all? maybe not.
 
       ;; Note: because every value should conform to all intersected realms, every translation should be able to translate all values.
       ;; So we can just take the first one. (can't be empty)
@@ -255,7 +253,7 @@
         :boolean id
         :uuid transit-uuid
         ;; TODO: can we support :char ? :rational?
-        :any id ;; assuming the value is compatible with transit. (do runtime check?; offer support for transit-realm instead of any?)
+        ;; :any id ;; assuming the value is compatible with transit. (do runtime check?; offer support for transit-realm instead of any?)
         (throw (format/unsupported-exn realm)))
 
       ;; TODO: support transit-realm, edn-realm?
@@ -305,9 +303,6 @@
         (ensure-transit realm map?
                         lens/id))
 
-      (realm-inspection/record? realm)
-      (flat-record-lens realm recurse)
-
       (realm-inspection/enum? realm)
       (let [values (realm-inspection/enum-realm-values realm)]
         (doseq [v values]
@@ -317,6 +312,30 @@
 
       :else
       (throw (format/unsupported-exn realm)))))
+
+(defn- extended [realm]
+  ;; Note: this does some checks on the transit values that are read,
+  ;; but those checks only guarantee that no information is lost/silently dropped.
+  ;; The translated values may still not be 'contained' in the target
+  ;; realm, which has to be checked separately.
+  (fn [recurse] ;; TODO: move that down to where it is needed
+    (cond
+      (realm-inspection/union? realm)
+      ;; or flat-union? flat-union has a smaller representation, but will have less performance.
+      (tagged-union-lens (realm-inspection/union-realm-realms realm) recurse)
+
+      (realm-inspection/builtin-scalar? realm)
+      (case (realm-inspection/builtin-scalar-realm-id realm)
+        :any id ;; assuming the value is compatible with transit. (do runtime check?; offer support for transit-realm instead of any?)
+        ((basic realm) recurse))
+
+      ;; TODO: support transit-realm, edn-realm?
+
+      (realm-inspection/record? realm)
+      (flat-record-lens realm recurse)
+
+      :else
+      ((basic realm) recurse))))
 
 (def ^{:doc "Translates values described by a realm to values usable by transit. The defaults cover most realms."} transit-format
   ;; Note: use this only when you are ok with the coupling that this introduces.
@@ -336,3 +355,7 @@
   ;; TODO: offer checked/unchecked versions
   (format/format ::transit
                  extended))
+
+(def transit-basic-format
+  (format/format ::transit-basic
+                 basic))
