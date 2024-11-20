@@ -1,6 +1,5 @@
 (ns active.data.http.reitit
   (:require [active.data.translate.core :as core]
-            ;; [active.data.realm.validation :as realm-validation]
             [active.data.realm.inspection :as realm-inspection]
             [active.data.http.common :as common]
             [active.data.realm :as realm]
@@ -46,9 +45,8 @@
     :else
     (assert false (str "Invalid model: " (pr-str model)))))
 
-(defn- convert-to-model [model value format]
-  (assert (nil? format) (str "TODO: What does " format "mean?"))
-
+(defn- convert-to-model [model value _format]
+  ;; Note: format can be 'application/transit+json' for example; not needed here.
   (condp instance? model
     RealmModel
     ((:to model) value)
@@ -110,7 +108,7 @@
       (-response-coercer [_this model]
         ;; model is the result of compile-model here
         (assert (instance? RealmModel model))
-        (fn [value format]
-          (assert (nil? format) (str "TODO: What does " format "mean?"))
+        (fn [value _format]
+          ;; Note: format can be 'application/transit+json' for example; not needed here.
           ((:from model) value))))))
 
