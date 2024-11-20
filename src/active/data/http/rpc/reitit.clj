@@ -45,7 +45,7 @@
   ```
 
   You will also need to add
-  [[reitit.ring.middleware.parameters/parameters-middlware]] to you
+  [[reitit.ring.middleware.parameters/parameters-middleware]] to you
   middlware chain. If you don't need it anywhere else in your
   application, set is via the `opts` too:
 
