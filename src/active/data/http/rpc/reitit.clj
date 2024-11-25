@@ -59,7 +59,7 @@
    ;; TODO: need to set/fix transit?
    (assert (= :transit (common/context-underlying-format context)))
    (ring/router
-    [(common/context-path context) (vec (apply concat implementations))]
+    [(common/context-path context) (vec implementations)]
     (merge opts
            {:data (merge (:data opts)
                          {:coercion (reitit/realm-coercion (common/context-format context))
