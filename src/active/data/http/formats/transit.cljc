@@ -198,11 +198,21 @@
 
 (defn- vector-lens [lenses]
   ;; TODO: there are probably more efficient ways
-  (lens/>> (lens/default (vec (repeat (count lenses) nil)))
-           (lens/pattern (->> lenses
-                              (map-indexed (fn [idx lens]
-                                             (lens/>> (lens/at-index idx) lens)))
-                              (vec)))))
+  ;; Note: lens/default would turn an empty vector into nil
+  (if (empty? lenses)
+    (lens/xmap (fn to-realm [v]
+                 (when-not (= [] v)
+                   (throw (format/format-error "Not an empty vector" v)))
+                 [])
+               (fn from-realm [v]
+                 (when-not (= [] v)
+                   (throw (format/format-error "Not an empty vector" v)))
+                 []))
+    (lens/>> (lens/default (vec (repeat (count lenses) nil)))
+             (lens/pattern (->> lenses
+                                (map-indexed (fn [idx lens]
+                                               (lens/>> (lens/at-index idx) lens)))
+                                (vec))))))
 
 (defn- ensure-map-has-no-other-keys [realm lens]
   (let [expected-key? (set (keys (realm-inspection/map-with-keys-realm-map realm)))]

@@ -41,6 +41,6 @@
 (def response-result :result)
 
 (defn request [args]
-  {:args args})
+  {:args (vec args)})
 
 (def request-args :args)

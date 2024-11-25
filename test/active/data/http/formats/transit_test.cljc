@@ -32,6 +32,10 @@
     (t/is (format/format-error? (try (core/translate-to realm sut/transit-format :foo)
                                      (catch #?(:clj Exception :cljs :default) e e))))))
 
+(t/deftest empty-tuple-test
+  (t/is (= [] (core/translate-from (realm/tuple) sut/transit-format [])))
+  (t/is (vector? (core/translate-from (realm/tuple) sut/transit-format []))))
+
 (r/def-record rec-ab
   [rec-a :- realm/string
    rec-b :- realm/integer])
