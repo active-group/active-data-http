@@ -17,13 +17,17 @@
 
 (rpc/defn-rpc my-plus my-api :- dummy-int [x :- dummy-int, y :- realm/integer])
 
+(rpc/defn-rpc no-arg-fn my-api :- realm/string [])
+
 #?(:clj
    (do
      (def my-router
        (reitit/context-router
         my-api
         [(reitit/impl #'my-plus (fn [x y]
-                                  (dummy-int d-x (+ (d-x x) y))))]))
+                                  (dummy-int d-x (+ (d-x x) y))))
+         (reitit/impl #'no-arg-fn (fn []
+                                    "foo"))]))
 
      (def my-app
        (ring/ring-handler my-router))))
@@ -39,7 +43,11 @@
                        ;; :headers {"Accept" "application/transit+json"}
                        ;; :accept "application/transit+json"
                        :uri "/internal-api/my-plus"
-                       :body-params {:args [[1] 2]}})))))
+                       :body-params {:args [[1] 2]}})))
+     (t/is (= {:status 200, :body {:result "foo"}}
+              (my-app {:request-method :post
+                       :uri "/internal-api/no-arg-fn"
+                       :body-params {:args []}})))))
 
 #?(:cljs
    (do
@@ -67,4 +75,11 @@
                   (simulate-request call)))
 
          (t/is (= (dummy-int d-x 3)
-                  (reacl-c.ajax/response-value (simulate-response call (reacl-c.ajax/make-response true {:result [3]})))))))))
+                  (reacl-c.ajax/response-value (simulate-response call (reacl-c.ajax/make-response true {:result [3]}))))))
+
+       (t/is (= {:uri "/internal-api/no-arg-fn"
+                 :method "POST"
+                 :format :transit
+                 :response-format :transit
+                 :params {:args []}}
+                (simulate-request (no-arg-fn)))))))
