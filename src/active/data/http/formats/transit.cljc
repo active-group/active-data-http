@@ -231,7 +231,7 @@
   (lens/lens (fn to-realm [v]
                (doall (lens/yank v lens)))
              (fn from-realm [d v]
-               (doall (lens/shove d v lens)))))
+               (doall (lens/shove d lens v)))))
 
 (defn basic [realm]
   ;; Note: this does some checks on the transit values that are read,
