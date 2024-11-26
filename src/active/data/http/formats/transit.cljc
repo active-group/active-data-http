@@ -227,6 +227,12 @@
                (fn from-realm [v]
                  (lens/shove nil lens v)))))
 
+(defn- doall-lens [lens]
+  (lens/lens (fn to-realm [v]
+               (doall (lens/yank v lens)))
+             (fn from-realm [d v]
+               (doall (lens/shove d v lens)))))
+
 (defn basic [realm]
   ;; Note: this does some checks on the transit values that are read,
   ;; but those checks only guarantee that no information is lost/silently dropped.
@@ -276,7 +282,7 @@
 
       (realm-inspection/sequence-of? realm)
       (ensure-transit realm sequential?
-                      (lens/mapl (recurse (realm-inspection/sequence-of-realm-realm realm))))
+                      (doall-lens (lens/mapl (recurse (realm-inspection/sequence-of-realm-realm realm)))))
 
       (realm-inspection/set-of? realm)
       (ensure-transit realm set?
