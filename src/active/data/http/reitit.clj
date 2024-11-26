@@ -1,5 +1,6 @@
 (ns active.data.http.reitit
   (:require [active.data.translate.core :as core]
+            [active.data.translate.format :as format]
             [active.data.realm.inspection :as realm-inspection]
             [active.data.http.common :as common]
             [active.data.realm :as realm]
@@ -11,21 +12,25 @@
 
 (defrecord ^:private RealmModel [to from])
 
+(defn- wrap-coercion-errors [thunk]
+  ;; turn format errors into coercion errors
+  ;; Note: It seems as reitit would catch-all exceptions anyway, and swallow them quite silently.
+  (try (thunk)
+       (catch Exception e
+         (cond
+           (format/format-error? e)
+           (coercion/map->CoercionError
+            {:problems [(ex-message e)]})
+
+           :else
+           (coercion/map->CoercionError
+            {:problems [(.getMessage ^Exception e)]})))))
+
 (defn- realm-model [format realm]
   (let [realm (realm/compile realm)]
     (map->RealmModel
      {:from (core/translator-from realm format)
-      :to (core/translator-to realm format)
-      ;; TODO: turn format/runtime-error into coercion errors?!
-      #_(let [to (core/translator-to realm format)]
-          (fn [value]
-              ;; FIXME: checking is not thread-safe; but validator only checks one level; need a deep check here.
-              ;; OR: don't do any checking?
-            (try (realm-validation/checking (to value))
-                 (catch Exception e
-                   (coercion/map->CoercionError
-                    {:realm (realm-inspection/description realm)
-                     :problems [(:error (ex-data e))]})))))})))
+      :to (core/translator-to realm format)})))
 
 (defn- compile-model [body-format string-format model _name]
   ;; Note: model may be {:foo realm} for query and path parameters
@@ -49,7 +54,7 @@
   ;; Note: format can be 'application/transit+json' for example; not needed here.
   (condp instance? model
     RealmModel
-    ((:to model) value)
+    (wrap-coercion-errors #((:to model) value))
 
     MapModel
     (let [known (reduce-kv (fn [res key model]
@@ -110,5 +115,4 @@
         (assert (instance? RealmModel model))
         (fn [value _format]
           ;; Note: format can be 'application/transit+json' for example; not needed here.
-          ((:from model) value))))))
-
+          (wrap-coercion-errors #((:from model) value)))))))

@@ -64,6 +64,8 @@
            {:data (merge (:data opts)
                          {:coercion (reitit/realm-coercion (common/context-format context))
                           :middleware (vec (concat (:middleware (:data opts))
-                                                   [;; rrc/coerce-exceptions-middleware ;; <- TODO: what's exceptions-middleware for? need it? try without for now.
+                                                   ;; Note: coerce-exceptions: "turns coercion exceptions into pretty responses"
+                                                   ;; ...not ideal, but better than empty responses, which we get otherwise.
+                                                   [rrc/coerce-exceptions-middleware
                                                     rrc/coerce-request-middleware
                                                     rrc/coerce-response-middleware]))})}))))
