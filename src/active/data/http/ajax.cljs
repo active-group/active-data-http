@@ -78,7 +78,9 @@
   (as-> request $
     (assoc $
            :format :transit
-           :response-format :transit)
+           ;; Note: let cljs-ajax set accept headers and parse accoding to response content-type; should be json, but often errors are plain text.
+           ;; :response-format :transit
+           )
     (apply prepare-use-format $ body-format opts)))
 
 (defn use-transit-format [request body-format & opts]
