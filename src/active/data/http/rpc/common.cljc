@@ -1,4 +1,4 @@
-(ns active.data.http.rpc.common
+(ns ^:no-doc active.data.http.rpc.common
   (:require [active.data.record :as r #?@(:cljs [:include-macros true])]
             [active.data.realm :as realm]))
 

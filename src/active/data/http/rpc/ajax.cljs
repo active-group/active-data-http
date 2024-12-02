@@ -1,4 +1,4 @@
-(ns active.data.http.rpc.ajax
+(ns ^:no-doc active.data.http.rpc.ajax
   (:require [active.data.http.rpc.common :as common]
             [active.data.http.ajax :as ajax]))
 
@@ -11,6 +11,7 @@
          :response-realm (common/response-realm rpc)}
         (ajax/prepare-use-transit-format (common/context-format context)))))
 
+;; Note: this could be something that returns a promise of the result of an ajax call.
 #_(defn caller [rpc]
     (let [prep (prepare-request rpc)]
       (fn [handler & args] ;; or take a map? error-handler etc.

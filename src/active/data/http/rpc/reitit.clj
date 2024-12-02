@@ -5,7 +5,20 @@
             [reitit.ring.coercion :as rrc]
             [active.data.http.reitit :as reitit]))
 
-(defn impl-ext [rpc-var spec]
+(defn impl-ext
+  "Specifies an rpc implemtation as a ring handler spec, where the
+  `:handler` takes a request map and returning a response map. The
+  request map will contain an `:args` key, containing the list of
+  arguments of the rpc call, and must return the rpc result as the
+  `:body` in the response map.
+
+  ```
+  (impl-ext #'my-api/plus
+            {:handler (fn [req]
+                        {:status 200 :body (apply + (:args req))})})
+  ```
+  "
+  [rpc-var spec]
   (let [rpc (rpc/resolve-rpc rpc-var)]
     [(str "/" (common/rpc-path rpc))
      {:post (-> spec
@@ -13,7 +26,7 @@
                                    (when handler
                                      (fn [request]
                                        (assert (some? (:body (:parameters request)))
-                                               "Missing body parameters in request. Did you add reitit.ring.middleware.parameters/parameters-middlware to the middware chain?")
+                                               "Missing body parameters in request. Adding reitit.ring.middleware.parameters/parameters-middlware to the middware chain may fix this.")
                                        (let [response (handler (assoc request :args (common/request-args (:body (:parameters request)))))]
                                          (cond-> response
                                            (= 200 (:status response))
@@ -24,15 +37,34 @@
                                             200
                                             {:body (common/response-realm rpc)}))))}]))
 
-(defn impl [rpc-var handler]
+(defn impl
+  "Specifies an rpc implemtation as a function with the arguments and
+return value exaclty as declared in the rpc declaration via
+  [[active.data.http.rpc/defn-rpc]].
+
+  ```
+  (impl #'my-api/plus +)
+  ```
+  "
+  [rpc-var handler]
   (impl-ext rpc-var {:handler (fn [request]
                                 {:status 200
                                  :body (apply handler (:args request))})}))
+
+(defn- context-routes [context implementations]
+  ;; TODO: assert all implemented rpcs are from this context?
+  ;; TODO: need to set/fix transit?
+  (assert (= :transit (common/context-underlying-format context)))
+  [(common/context-path context) (vec implementations)])
 
 (defn context-router
   "Returns a [[reitit.ring/router]] defining routes that implement the
    given rpcs. Use [[impl]] or [[impl-ext]] to specify the
    implementations. The `opts` parameter is the same as for [[reitit.ring/router]].
+
+  ```
+  (context-router my-api/context [(impl #'my-api/plus +)])
+  ```
 
   Important note: To use this, you need a transit parser middleware in
   your middleware chain, like muuntaja for example
@@ -47,7 +79,7 @@
   You will also need to add
   [[reitit.ring.middleware.parameters/parameters-middleware]] to you
   middlware chain. If you don't need it anywhere else in your
-  application, set is via the `opts` too:
+  application, set it via the `opts` too:
 
   ```
   {:data {:middleware [reitit.ring.middleware.parameters/parameters-middlware]}}
@@ -55,11 +87,8 @@
   ([context implementations]
    (context-router context implementations nil))
   ([context implementations opts]
-   ;; TODO: assert all implemented rpcs are from this context?
-   ;; TODO: need to set/fix transit?
-   (assert (= :transit (common/context-underlying-format context)))
    (ring/router
-    [(common/context-path context) (vec implementations)]
+    (context-routes context implementations)
     (merge opts
            {:data (merge (:data opts)
                          {:coercion (reitit/realm-coercion (common/context-format context))

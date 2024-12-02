@@ -2,7 +2,15 @@
   (:require [active.data.http.rpc.common :as common]
             [active.data.http.formats.transit :as transit]))
 
-(defn context [path & {realm-format :format underlying :underlying-format caller :caller}]
+(defn context
+  "Returns an rpc context to be used in RPC declarations and
+  implementations.
+
+  ```
+  (def my-api (context \"/api/my\"))
+  ```
+  "
+  [path & {realm-format :format underlying :underlying-format caller :caller}]
   ;; Note: for now we expect the format to support common.request/response (could add that explicitly if needed)
   (common/context {common/context-format (or realm-format transit/transit-format)
                    common/context-underlying-format (or underlying :transit)
@@ -10,13 +18,24 @@
                    ;; e.g. pass active.data.http.rpc.reacl-c/caller as the caller for cljs (default nil to not have the depedency)
                    common/context-create-caller caller}))
 
-(defn set-context-caller [context caller]
+(defn set-context-caller
+  "Replaces the `context caller` of the given rpc context. This should be
+a function, that given an RPC representation usually returns a
+function taking the RPC's arguments. The details depend on the caller
+  though.
+
+  ```
+  (def my-api (-> (context \"/api/my\")
+                  #?(:cljs (set-context-caller cljs-caller))))
+  ```
+  "
+  [context caller]
   (assoc context common/context-create-caller caller))
 
 (defn ^:no-doc make-rpc [context name result-realm parameter-realms]
   (common/rpc {common/rpc-name name
                common/rpc-context context
-               ;; TODO use (realm/enum nil) as default result?
+               ;; TODO use (realm/enum nil) or realm/any as default result?
                common/rpc-result-realm result-realm
                common/rpc-parameter-realms parameter-realms}))
 
@@ -42,7 +61,13 @@
         [nil (parse-param-realms (first args))])))
 
 (defmacro defn-rpc
-  "(defn-rpc foo context \"docstring\" :- realm/string [x :- realm/integer])"
+  "Declares an RPC endpoint. Depending on the referenced [[context]], the
+defined name can be called as a function.
+  
+  ```
+  (defn-rpc foo context \"docstring\" :- realm/string [x :- realm/integer])
+  ```
+  "
   [name context & more]
   ;; TODO: maybe allow metadata that overrides the rpc-path?
   (let [[docstring more] (if (string? (first more))
@@ -53,4 +78,5 @@
        (def ~name (common/create-caller rpc#))
        (alter-meta! (var ~name) assoc ::rpc rpc#)
        (when ~docstring
-         (alter-meta! (var ~name) assoc :docstring ~docstring)))))
+         (alter-meta! (var ~name) assoc :docstring ~docstring))
+       (var ~name))))
