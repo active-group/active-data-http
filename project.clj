@@ -12,7 +12,7 @@
                  [metosin/reitit-spec "0.7.2" :scope "provided"]
                  [de.active-group/reacl-c-basics "0.11.8" :scope "provided"]]
 
-  :plugins [[lein-codox "0.10.7"]]
+  :plugins [[lein-codox "0.10.8"]]
 
   ;; run clojurescript tests via
   ;; > npm run test
@@ -27,6 +27,6 @@
 
   :codox {:language :clojure
           :metadata {:doc/format :markdown}
-          :themes [:rdash]
+          ;;:themes [:rdash]
           :src-dir-uri "http://github.com/active-group/active-monad/blob/master/"
           :src-linenum-anchor-prefix "L"})
