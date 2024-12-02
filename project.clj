@@ -25,8 +25,6 @@
              :dev
              {:dependencies [[clj-kondo "2024.09.27"]]}}
 
-  :codox {:language :clojure
-          :metadata {:doc/format :markdown}
-          ;;:themes [:rdash]
+  :codox {:metadata {:doc/format :markdown}
           :src-dir-uri "http://github.com/active-group/active-monad/blob/master/"
           :src-linenum-anchor-prefix "L"})
