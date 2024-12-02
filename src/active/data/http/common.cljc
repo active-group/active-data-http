@@ -1,5 +1,6 @@
 (ns active.data.http.common
   (:require [active.data.translate.format :as format]
+            [active.data.translate.formatter :as formatter]
             [active.data.realm :as realm]
             [active.clojure.lens :as lens]))
 
@@ -31,6 +32,6 @@
   default-string-format
   (format/format ::default-string-format
                  ;; TODO: maybe we can support a bit more, and unions, enums. But not everything can be supported (not as much as for bodies)
-                 {realm/string (format/simple lens/id)
-                  realm/uuid (format/simple uuid-lens)
-                  realm/integer (format/simple integer-lens)}))
+                 {realm/string (formatter/simple lens/id)
+                  realm/uuid (formatter/simple uuid-lens)
+                  realm/integer (formatter/simple integer-lens)}))
