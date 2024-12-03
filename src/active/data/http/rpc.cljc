@@ -11,7 +11,9 @@
   ```
   "
   [path & {realm-format :format underlying :underlying-format caller :caller}]
-  ;; Note: for now we expect the format to support common.request/response (could add that explicitly if needed)
+  ;; Note: for now we expect the format to support all that is used by
+  ;; common.request/response, i.e. map-with-keys and tuple (could add
+  ;; that explicitly if needed)
   (common/context {common/context-format (or realm-format transit/transit-format)
                    common/context-underlying-format (or underlying :transit)
                    common/context-path path
