@@ -9,3 +9,4 @@ node_modules
 out
 .lein-repl-history
 .nrepl-port
+pom.xml
