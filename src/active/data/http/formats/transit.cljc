@@ -1,6 +1,6 @@
 (ns active.data.http.formats.transit
   (:require [active.data.translate.format :as format]
-            [active.data.realm :as realm]
+            [active.data.translate.formatter :as formatter]
             [active.data.realm.inspection :as realm-inspection]
             [active.clojure.lens :as lens]
             #?(:cljs [cognitect.transit :as transit])))
@@ -40,12 +40,10 @@
                    ;; TODO array, list, set, map, link
                    )))
 
-(def ^:private id lens/id)
-
 (def ^:private transit-uuid
   ;; Note: realm uuid is: clojure.core/uuid? (java.util.UUID) resp. cljs.core/uuid? (cljs.core/UUID)
   ;; transit uuid is: java.util.UUID  resp. com.cognitect.transit in cljs
-  #?(:clj id
+  #?(:clj lens/id
      :cljs (lens/xmap (fn to-realm [v]
                         ;; v should satisfy (transit/uuid? v)
                         (uuid (str v)))
@@ -64,16 +62,6 @@
              (fn from-realm [v]
                (set (lens/shove nil seq-lens v)))))
 
-(def ^:private nil-as-empty-map
-  (lens/xmap (fn to-realm [v]
-               (if (nil? v)
-                 {}
-                 v))
-             (fn from-realm [v]
-               (if (nil? v)
-                 {}
-                 v))))
-
 #_(def ^:private transit-number
     #?(:clj id
        :cljs (lens/xmap (fn to-realm [v]
@@ -90,92 +78,38 @@
                  (-> realm/any
                      (realm/restricted transit?))))
 
-(defn- tagged-union-lens [realms resolve]
-  ;; represents (union r1 r2) as [0 ->r1] [1 ->r2] etc.
-  (let [tags-realms-lenses-map (->> realms
-                                    (map-indexed (fn [idx realm]
-                                                   [idx [realm (resolve realm)]]))
-                                    (into {}))]
-    (lens/xmap (fn to-realm [raw]
-                 (when (not (and (vector? raw)
-                                 (= 2 (count raw))))
-                   (throw (format/format-error "Expected a vector of length 2 as the union representation" raw)))
-                 (let [[idx v] raw]
-                   (if-let [[_realm lens] (get tags-realms-lenses-map idx)]
-                     (lens/yank v lens)
-                     (throw (format/format-error "Unexpected union tag" idx)))))
-               (let [try-all (->> tags-realms-lenses-map
-                                  (map (fn [[idx [realm lens]]]
-                                         (fn [value]
-                                           (when (realm/contains? realm value)
-                                             [idx (lens/shove nil lens value)]))))
-                                  (apply some-fn))]
-                 (fn from-realm [v]
-                   (or (try-all v)
-                       (throw (format/format-error "Value not contained in union realm" v))))))))
-
-;; (defn flat-union ... just try them all)
-#_(defn- flat-union [realms resolve]
-  ;; represents (union r1 r2) as r1 | r2, just trying all
-    (let [lenses (doall (map resolve realms))]
-      (lens/xmap (fn to-realm [v]
-                   (let [res (reduce (fn [_ lens]
-                                       (try (reduced [(lens/yank v lens)])
-                                          ;; TODO: format-error
-                                            (catch #?(:clj Exception :cljs :default) e
-                                              nil)))
-                                     nil
-                                     lenses)]
-                     (if (nil? res)
-                       (throw ...) ;; TODO format-error
-                       (first res))))
-                 (fn from-realm [v]
-                   (let [res (reduce (fn [_ lens]
-                                       ;; could use (realm/contains?) here to reduce attempts
-                                       (try (reduced [(lens/shove nil lens v)])
-                                            (catch #?(:clj Exception :cljs :default) e
-                                              nil)))
-                                     nil
-                                     lenses)]
-                     (if (nil? res)
-                       (throw ...)
-                       (first res)))))))
-
-(defn- flat-record-lens [realm resolve]
-  ;; represents a record as a vector of the values, in the order defined by the record realm.
-  (let [realms (map realm-inspection/record-realm-field-realm
-                    (realm-inspection/record-realm-fields realm))
-        lenses (doall (map resolve realms))
-        getters  (map realm-inspection/record-realm-field-getter
+(defn- flat-record [realm]
+  (fn [resolve]
+    ;; represents a record as a vector of the values, in the order defined by the record realm.
+    (let [realms (map realm-inspection/record-realm-field-realm
                       (realm-inspection/record-realm-fields realm))
-        constr (realm-inspection/record-realm-constructor realm)]
-    (lens/xmap (fn [edn]
-                 (when-not (vector? edn)
-                   (throw (format/format-error "Expected a vector for record realm" edn)))
-                 (when (not= (count (realm-inspection/record-realm-fields realm))
-                             (count edn))
-                   (throw (format/format-error (str "Expected " (count (realm-inspection/record-realm-fields realm)) " values for record realm, but only got " (count edn))
-                                               edn)))
-                 (let [vals (map (fn [v lens]
-                                   (lens/yank v lens))
-                                 edn
-                                 lenses)
-                       res (apply constr vals)]
-                   res))
-               (fn [inst]
-                 (let [res (let [vals (map (fn [getter]
-                                             (getter inst))
-                                           getters)
-                                 edn (map (fn [v lens]
-                                            (lens/shove nil lens v))
-                                          vals
-                                          lenses)]
-                             (vec edn))]
-                   res)))))
-
-#_(defn- tagged-record-lens [realm resolve]
-    (transit/tagged-value (record-realm-name ...)
-                          {field-name => (resolve ...) value}))
+          lenses (doall (map resolve realms))
+          getters  (map realm-inspection/record-realm-field-getter
+                        (realm-inspection/record-realm-fields realm))
+          constr (realm-inspection/record-realm-constructor realm)]
+      (lens/xmap (fn [edn]
+                   (when-not (vector? edn)
+                     (throw (format/format-error "Expected a vector for record realm" edn)))
+                   (when (not= (count (realm-inspection/record-realm-fields realm))
+                               (count edn))
+                     (throw (format/format-error (str "Expected " (count (realm-inspection/record-realm-fields realm)) " values for record realm, but only got " (count edn))
+                                                 edn)))
+                   (let [vals (map (fn [v lens]
+                                     (lens/yank v lens))
+                                   edn
+                                   lenses)
+                         res (apply constr vals)]
+                     res))
+                 (fn [inst]
+                   (let [res (let [vals (map (fn [getter]
+                                               (getter inst))
+                                             getters)
+                                   edn (map (fn [v lens]
+                                              (lens/shove nil lens v))
+                                            vals
+                                            lenses)]
+                               (vec edn))]
+                     res))))))
 
 (defn- ensure-transit [_realm pred lens]
   (lens/xmap (fn to-realm [v]
@@ -197,7 +131,7 @@
                                        (transient {}) v)))))
 
 (defn- vector-lens [lenses]
-  ;; TODO: there are probably more efficient ways
+  ;; TODO: there are probably more efficient ways to implement this
   ;; Note: lens/default would turn an empty vector into nil
   (if (empty? lenses)
     (lens/xmap (fn to-realm [v]
@@ -241,63 +175,66 @@
                (assoc m k v))))
 
 (defn basic [realm]
-  ;; TODO: can use active.data.translate.formatter utils?
-
   ;; Note: this does some checks on the transit values that are read,
   ;; but those checks only guarantee that no information is lost/silently dropped.
   ;; The translated values may still not be 'contained' in the target
-  ;; realm, which has to be checked separately.
-  (fn [resolve] ;; TODO: move that down to where it is needed
-    (cond
-      (realm-inspection/optional? realm)
+  ;; realm, which has to be checked separately if needed.
+  (cond
+    (realm-inspection/optional? realm)
+    (fn [resolve]
       (let [inner-t (resolve (realm-inspection/optional-realm-realm realm))]
-        (optional inner-t))
+        (optional inner-t)))
 
-      (realm-inspection/delayed? realm)
-      ;; Note: for now we assume, that at the time this translation is fetched, the realm must be resolvable.
-      (resolve (deref (realm-inspection/delayed-realm-delay realm)))
+    (realm-inspection/delayed? realm)
+    ;; Note: for now we assume, that at the time this translation is fetched, the realm must be resolvable.
+    (fn [resolve]
+      (resolve (deref (realm-inspection/delayed-realm-delay realm))))
 
-      (realm-inspection/named? realm)
-      (resolve (realm-inspection/named-realm-realm realm))
+    (realm-inspection/named? realm)
+    (fn [resolve]
+      (resolve (realm-inspection/named-realm-realm realm)))
 
-      ;; (realm-inspection/union? realm) ;; or flat-union? try them all? maybe not.
+    ;; (realm-inspection/union? realm) ;; or flat-union? try them all? maybe not.
 
-      ;; Note: because every value should conform to all intersected realms, every translation should be able to translate all values.
-      ;; So we can just take the first one. (can't be empty)
-      (realm-inspection/intersection? realm)
-      ;; We could also try them all and use the first that works?
-      (resolve (first (realm-inspection/intersection-realm-realms realm)))
+    ;; Note: because every value should conform to all intersected realms, every translation should be able to translate all values.
+    ;; So we can just take the first one. (can't be empty)
+    (realm-inspection/intersection? realm)
+    ;; We could also try them all and use the first that works?
+    (fn [resolve]
+      (resolve (first (realm-inspection/intersection-realm-realms realm))))
 
-      ;; TODO: what about map-with-tag?
-      (realm-inspection/builtin-scalar? realm)
-      (case (realm-inspection/builtin-scalar-realm-id realm)
-        :number id ;; TODO: is this correct?
-        :keyword id
-        :symbol id
-        :string id
-        :boolean id
-        :uuid transit-uuid
-        ;; TODO: can we support :char ? :rational?
-        ;; :any id ;; assuming the value is compatible with transit. (do runtime check?; offer support for transit-realm instead of any?)
-        (throw (format/unsupported-exn realm)))
+    (realm-inspection/builtin-scalar? realm)
+    (case (realm-inspection/builtin-scalar-realm-id realm)
+      :number formatter/id ;; TODO: is this correct? transit-number?
+      :keyword formatter/id
+      :symbol formatter/id
+      :string formatter/id
+      :boolean formatter/id
+      :uuid (formatter/simple transit-uuid)
+      ;; TODO: can we support :char ? :rational?
+      ;; :any id ;; assuming the value is compatible with transit. (do runtime check?; offer support for transit-realm instead of any?)
+      (throw (format/unsupported-exn realm)))
 
-      ;; TODO: support transit-realm, edn-realm?
+    ;; TODO: support transit-realm, edn-realm?
 
-      (realm-inspection/integer-from-to? realm)
-      id
+    (realm-inspection/integer-from-to? realm)
+    formatter/id
 
-      (realm-inspection/real-range? realm)
-      id
+    (realm-inspection/real-range? realm)
+    formatter/id
 
-      (realm-inspection/sequence-of? realm)
+    (realm-inspection/sequence-of? realm)
+    (fn [resolve]
       (ensure-transit realm sequential?
-                      (doall-lens (lens/mapl (resolve (realm-inspection/sequence-of-realm-realm realm)))))
+                      (doall-lens (lens/mapl (resolve (realm-inspection/sequence-of-realm-realm realm))))))
 
-      (realm-inspection/set-of? realm)
+    (realm-inspection/set-of? realm)
+    (fn [resolve]
       (ensure-transit realm set?
-                      (set-as-seq (lens/mapl (resolve (realm-inspection/set-of-realm-realm realm)))))
+                      (set-as-seq (lens/mapl (resolve (realm-inspection/set-of-realm-realm realm))))))
 
-      (realm-inspection/map-with-keys? realm)
+    (realm-inspection/map-with-keys? realm)
+    (fn [resolve]
       (ensure-map-has-no-other-keys
        realm
        (lens/pattern (->> (realm-inspection/map-with-keys-realm-map realm)
@@ -305,62 +242,66 @@
                                  (when-not (transit? k)
                                    (throw (format/unsupported-exn k [realm])))
                                  [(map-member k) (lens/>> (map-member k) (resolve value-realm))]))
-                          (into {}))))
+                          (into {})))))
 
-      (realm-inspection/map-of? realm)
+    (realm-inspection/map-of? realm)
+    (fn [resolve]
       (ensure-transit realm map?
                       (map-lens (resolve (realm-inspection/map-of-realm-key-realm realm))
-                                (resolve (realm-inspection/map-of-realm-value-realm realm))))
+                                (resolve (realm-inspection/map-of-realm-value-realm realm)))))
 
-      (realm-inspection/tuple? realm)
+    (realm-inspection/tuple? realm)
+    (fn [resolve]
       (ensure-transit realm #(and (vector? %)
                                   (= (count %) (count (realm-inspection/tuple-realm-realms realm))))
-                      (vector-lens (doall (map resolve (realm-inspection/tuple-realm-realms realm)))))
+                      (vector-lens (doall (map resolve (realm-inspection/tuple-realm-realms realm))))))
 
-      (realm-inspection/map-with-tag? realm)
-      ;; Note: we can check that the speficic key and value are transit?, but we have to assume the rest of the map is too. Can't help with translation.
-      (let [k (realm-inspection/map-with-tag-realm-key realm)
-            tag (realm-inspection/map-with-tag-realm-value realm)]
-        (when-not (transit? k)
-          (throw (format/unsupported-exn {:key k})))
-        (when-not (transit? tag)
-          (throw (format/unsupported-exn {:value tag})))
-        (ensure-transit realm map?
-                        lens/id))
+    (realm-inspection/map-with-tag? realm)
+    ;; Note: we can check that the speficic key and value are transit?, but we have to assume the rest of the map is too. Can't help with translation.
+    (let [k (realm-inspection/map-with-tag-realm-key realm)
+          tag (realm-inspection/map-with-tag-realm-value realm)]
+      (when-not (transit? k)
+        (throw (format/unsupported-exn {:key k})))
+      (when-not (transit? tag)
+        (throw (format/unsupported-exn {:value tag})))
+      (formatter/simple (ensure-transit realm map? ;; TODO: no check for the tag?
+                                        lens/id)))
 
-      (realm-inspection/enum? realm)
-      (let [values (realm-inspection/enum-realm-values realm)]
-        (doseq [v values]
-          (when-not (transit? v)
-            (throw (format/unsupported-exn v))))
-        lens/id)
+    (realm-inspection/enum? realm)
+    (let [values (realm-inspection/enum-realm-values realm)]
+      ;; if the values are transit, we can format them as-is.
+      (doseq [v values]
+        (when-not (transit? v)
+          (throw (format/unsupported-exn v))))
+      formatter/id)
 
-      :else
-      (throw (format/unsupported-exn realm)))))
+    ;; TODO: support some kind of explicit transit-realm, edn-realm?
+
+    :else
+    (throw (format/unsupported-exn realm))))
 
 (defn- extended [realm]
   ;; Note: this does some checks on the transit values that are read,
   ;; but those checks only guarantee that no information is lost/silently dropped.
   ;; The translated values may still not be 'contained' in the target
   ;; realm, which has to be checked separately.
-  (fn [resolve] ;; TODO: move that down to where it is needed
-    (cond
-      (realm-inspection/union? realm)
-      ;; or flat-union? flat-union has a smaller representation, but will have less performance.
-      (tagged-union-lens (realm-inspection/union-realm-realms realm) resolve)
+  (cond
+    (realm-inspection/union? realm)
+    ;; simply use the order/position of the sub-realm as a tag
+    (formatter/tagged-union-tuple (->> (realm-inspection/union-realm-realms realm)
+                                       (map-indexed vector)
+                                       (into {})))
 
-      (realm-inspection/builtin-scalar? realm)
-      (case (realm-inspection/builtin-scalar-realm-id realm)
-        :any id ;; assuming the value is compatible with transit. (do runtime check?; offer support for transit-realm instead of any?)
-        ((basic realm) resolve))
+    (realm-inspection/builtin-scalar? realm)
+    (case (realm-inspection/builtin-scalar-realm-id realm)
+      :any formatter/id ;; assuming the value is compatible with transit. (do runtime check?; offer support for transit-realm instead of any?)
+      (basic realm))
 
-      ;; TODO: support transit-realm, edn-realm?
+    (realm-inspection/record? realm)
+    (flat-record realm)
 
-      (realm-inspection/record? realm)
-      (flat-record-lens realm resolve)
-
-      :else
-      ((basic realm) resolve))))
+    :else
+    (basic realm)))
 
 (def ^{:doc "Translates values described by a realm to values usable by transit. The defaults cover most realms."} transit-format
   ;; Note: use this only when you are ok with the coupling that this introduces.
