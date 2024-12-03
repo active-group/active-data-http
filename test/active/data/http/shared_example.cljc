@@ -1,5 +1,6 @@
 (ns active.data.http.shared-example
   (:require [active.data.translate.format :as format]
+            [active.data.translate.formatter :as formatter]
             [active.data.record :as r #?@(:cljs [:include-macros true])]
             [active.clojure.lens :as lens]
             [active.data.realm :as realm]))
@@ -13,7 +14,7 @@
 
 (def my-body-format
   (format/format :my-body-format
-                 {realm/integer (format/simple lens/id)
-                  plus-request (format/record-map plus-request [:x :y])
-                  plus-response (format/record-map plus-response [:total])}))
+                 {realm/integer (formatter/simple lens/id)
+                  plus-request (formatter/record-map plus-request [:x :y])
+                  plus-response (formatter/record-map plus-response [:total])}))
 

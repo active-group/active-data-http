@@ -233,6 +233,13 @@
              (fn from-realm [d v]
                (doall (lens/shove d lens v)))))
 
+(defn- map-member [k]
+  ;; Note: lens/member would do a dissoc on shoving nil; we don't want that.
+  (lens/lens (fn to-realm [v]
+               (get v k))
+             (fn from-realm [m v]
+               (assoc m k v))))
+
 (defn basic [realm]
   ;; TODO: can use active.data.translate.formatter utils?
 
@@ -297,7 +304,7 @@
                           (map (fn [[k value-realm]]
                                  (when-not (transit? k)
                                    (throw (format/unsupported-exn k [realm])))
-                                 [(lens/member k) (lens/>> (lens/member k) (resolve value-realm))]))
+                                 [(map-member k) (lens/>> (map-member k) (resolve value-realm))]))
                           (into {}))))
 
       (realm-inspection/map-of? realm)

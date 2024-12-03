@@ -8,33 +8,46 @@
 
 ;; TODO: clojurescript. and interop between clj and cljs (via transit values)
 
+(defn translate-to [realm format value]
+  ((core/translator-to realm format) value))
+
+(defn translate-from [realm format value]
+  ((core/translator-from realm format) value))
+
 (defn roundtrip [realm v]
-  (core/translate-to realm  sut/transit-format
-                     (core/translate-from realm sut/transit-format v)))
+  (translate-to realm sut/transit-format
+                (translate-from realm sut/transit-format v)))
 
 (t/deftest empty-map-test
   (let [realm (realm/map-of realm/integer realm/integer)
         v {}
         t {}]
-    (t/is (= t (core/translate-from realm sut/transit-format v)))
-    (t/is (= v (core/translate-to realm sut/transit-format t)))))
+    (t/is (= t (translate-from realm sut/transit-format v)))
+    (t/is (= v (translate-to realm sut/transit-format t)))))
+
+(t/deftest void-result-test
+  (let [realm (realm/map-with-keys {:result (realm/enum nil)})
+        v {:result nil}
+        t {:result nil}]
+    (t/is (= t (translate-from realm sut/transit-format v)))
+    (t/is (= v (translate-to realm sut/transit-format t)))))
 
 (t/deftest tuple-test
   (let [realm (realm/tuple realm/string realm/integer)
         v ["foo" 42]
         t ["foo" 42]]
-    (t/is (vector? (core/translate-from realm sut/transit-format v)))
-    (t/is (= t (core/translate-from realm sut/transit-format v)))
+    (t/is (vector? (translate-from realm sut/transit-format v)))
+    (t/is (= t (translate-from realm sut/transit-format v)))
 
-    (t/is (vector? (core/translate-to realm sut/transit-format t)))
-    (t/is (= v (core/translate-to realm sut/transit-format t)))
+    (t/is (vector? (translate-to realm sut/transit-format t)))
+    (t/is (= v (translate-to realm sut/transit-format t)))
 
-    (t/is (format/format-error? (try (core/translate-to realm sut/transit-format :foo)
+    (t/is (format/format-error? (try (translate-to realm sut/transit-format :foo)
                                      (catch #?(:clj Exception :cljs :default) e e))))))
 
 (t/deftest empty-tuple-test
-  (t/is (= [] (core/translate-from (realm/tuple) sut/transit-format [])))
-  (t/is (vector? (core/translate-from (realm/tuple) sut/transit-format []))))
+  (t/is (= [] (translate-from (realm/tuple) sut/transit-format [])))
+  (t/is (vector? (translate-from (realm/tuple) sut/transit-format []))))
 
 (r/def-record rec-ab
   [rec-a :- realm/string
