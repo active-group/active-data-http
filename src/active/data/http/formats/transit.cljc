@@ -3,7 +3,8 @@
             [active.data.translate.formatter :as formatter]
             [active.data.realm.inspection :as realm-inspection]
             [active.clojure.lens :as lens]
-            #?(:cljs [cognitect.transit :as transit])))
+            #?(:cljs [cognitect.transit :as transit])
+            [active.data.realm :as realm]))
 
 (def ^:private transit?
   ;; Note: this can be an expensive call; don't use it too much.
@@ -78,38 +79,52 @@
                  (-> realm/any
                      (realm/restricted transit?))))
 
-(defn- flat-record [realm]
-  (fn [resolve]
+#_(defn- flat-record [realm]
+    (fn [resolve]
     ;; represents a record as a vector of the values, in the order defined by the record realm.
-    (let [realms (map realm-inspection/record-realm-field-realm
-                      (realm-inspection/record-realm-fields realm))
-          lenses (doall (map resolve realms))
-          getters  (map realm-inspection/record-realm-field-getter
+      (let [realms (map realm-inspection/record-realm-field-realm
                         (realm-inspection/record-realm-fields realm))
-          constr (realm-inspection/record-realm-constructor realm)]
-      (lens/xmap (fn [edn]
-                   (when-not (vector? edn)
-                     (throw (format/format-error "Expected a vector for record realm" edn)))
-                   (when (not= (count (realm-inspection/record-realm-fields realm))
-                               (count edn))
-                     (throw (format/format-error (str "Expected " (count (realm-inspection/record-realm-fields realm)) " values for record realm, but only got " (count edn))
-                                                 edn)))
-                   (let [vals (map (fn [v lens]
-                                     (lens/yank v lens))
-                                   edn
-                                   lenses)
-                         res (apply constr vals)]
-                     res))
-                 (fn [inst]
-                   (let [res (let [vals (map (fn [getter]
-                                               (getter inst))
-                                             getters)
-                                   edn (map (fn [v lens]
-                                              (lens/shove nil lens v))
-                                            vals
-                                            lenses)]
-                               (vec edn))]
-                     res))))))
+            lenses (doall (map resolve realms))
+            getters  (map realm-inspection/record-realm-field-getter
+                          (realm-inspection/record-realm-fields realm))
+            constr (realm-inspection/record-realm-constructor realm)]
+        (lens/xmap (fn [edn]
+                     (when-not (vector? edn)
+                       (throw (format/format-error "Expected a vector for record realm" edn)))
+                     (when (not= (count (realm-inspection/record-realm-fields realm))
+                                 (count edn))
+                       (throw (format/format-error (str "Expected " (count (realm-inspection/record-realm-fields realm)) " values for record realm, but only got " (count edn))
+                                                   edn)))
+                     (let [vals (map (fn [v lens]
+                                     ;; TODO: errors-at pos/key...
+                                       (lens/yank v lens))
+                                     edn
+                                     lenses)
+                           res (apply constr vals)]
+                       res))
+                   (fn [inst]
+                     (let [res (let [vals (map (fn [getter]
+                                                 (getter inst))
+                                               getters)
+                                     edn (map (fn [v lens]
+                                              ;; TODO: (errors-at getter )
+                                                (lens/shove nil lens v))
+                                              vals
+                                              lenses)]
+                                 (vec edn))]
+                       res))))))
+
+(defn- record-as-tuple [record-realm tuple-lens]
+  (let [getters (map realm-inspection/record-realm-field-getter
+                     (realm-inspection/record-realm-fields record-realm))
+        ctor (realm-inspection/record-realm-constructor record-realm)]
+    (lens/xmap (fn to-realm [v]
+                 (apply ctor (lens/yank v tuple-lens)))
+               (fn from-realm [v]
+                 (lens/shove nil tuple-lens
+                             (mapv (fn [getter]
+                                     (getter v))
+                                   getters))))))
 
 (defn- ensure-transit [_realm pred lens]
   (lens/xmap (fn to-realm [v]
@@ -298,7 +313,12 @@
       (basic realm))
 
     (realm-inspection/record? realm)
-    (flat-record realm)
+    #_(flat-record realm)
+    ;; based on the tuple implementation
+    (let [base (basic (apply realm/tuple (map realm-inspection/record-realm-field-realm
+                                              (realm-inspection/record-realm-fields realm))))]
+      (fn [recurse]
+        (record-as-tuple realm (base recurse))))
 
     :else
     (basic realm)))
@@ -318,7 +338,7 @@
   ;; those definitions forwards/backwards-compatible to the extend possible or
   ;; needed, or expect different versions of the data.
 
-  ;; TODO: offer checked/unchecked versions
+  ;; TODO: offer checked/unchecked versions?
   (format/format ::transit
                  extended))
 
