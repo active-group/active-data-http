@@ -3,7 +3,7 @@
             :url "http://www.eclipse.org/legal/epl-v10.html"}
 
   :dependencies [[org.clojure/clojure "1.11.0"]
-                 [de.active-group/active-data-translate "1.0.0-SNAPSHOT"]
+                 [de.active-group/active-data-translate "0.1.0"]
                  [de.active-group/active-clojure "0.43.0"]
                  [com.cognitect/transit-cljs "0.8.280"]
                  [cljs-ajax "0.7.5" :scope "provided"]
