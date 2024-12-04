@@ -189,111 +189,112 @@
              (fn from-realm [m v]
                (assoc m k v))))
 
-(defn basic [realm]
-  ;; Note: this does some checks on the transit values that are read,
-  ;; but those checks only guarantee that no information is lost/silently dropped.
-  ;; The translated values may still not be 'contained' in the target
-  ;; realm, which has to be checked separately if needed.
-  (cond
-    (realm-inspection/optional? realm)
-    (fn [resolve]
-      (let [inner-t (resolve (realm-inspection/optional-realm-realm realm))]
-        (optional inner-t)))
+(def basic-formatters
+  (fn [realm]
+    ;; Note: this does some checks on the transit values that are read,
+    ;; but those checks only guarantee that no information is lost/silently dropped.
+    ;; The translated values may still not be 'contained' in the target
+    ;; realm, which has to be checked separately if needed.
+    (cond
+      (realm-inspection/optional? realm)
+      (fn [resolve]
+        (let [inner-t (resolve (realm-inspection/optional-realm-realm realm))]
+          (optional inner-t)))
 
-    (realm-inspection/delayed? realm)
-    ;; Note: for now we assume, that at the time this translation is fetched, the realm must be resolvable.
-    (fn [resolve]
-      (resolve (deref (realm-inspection/delayed-realm-delay realm))))
+      (realm-inspection/delayed? realm)
+      ;; Note: for now we assume, that at the time this translation is fetched, the realm must be resolvable.
+      (fn [resolve]
+        (resolve (deref (realm-inspection/delayed-realm-delay realm))))
 
-    (realm-inspection/named? realm)
-    (fn [resolve]
-      (resolve (realm-inspection/named-realm-realm realm)))
+      (realm-inspection/named? realm)
+      (fn [resolve]
+        (resolve (realm-inspection/named-realm-realm realm)))
 
-    ;; (realm-inspection/union? realm) ;; or flat-union? try them all? maybe not.
+      ;; (realm-inspection/union? realm) ;; or flat-union? try them all? maybe not.
 
-    ;; Note: because every value should conform to all intersected realms, every translation should be able to translate all values.
-    ;; So we can just take the first one. (can't be empty)
-    (realm-inspection/intersection? realm)
-    ;; We could also try them all and use the first that works?
-    (fn [resolve]
-      (resolve (first (realm-inspection/intersection-realm-realms realm))))
+      ;; Note: because every value should conform to all intersected realms, every translation should be able to translate all values.
+      ;; So we can just take the first one. (can't be empty)
+      (realm-inspection/intersection? realm)
+      ;; We could also try them all and use the first that works?
+      (fn [resolve]
+        (resolve (first (realm-inspection/intersection-realm-realms realm))))
 
-    (realm-inspection/builtin-scalar? realm)
-    (case (realm-inspection/builtin-scalar-realm-id realm)
-      :number formatter/id ;; TODO: is this correct? transit-number?
-      :keyword formatter/id
-      :symbol formatter/id
-      :string formatter/id
-      :boolean formatter/id
-      :uuid (formatter/simple transit-uuid)
-      ;; TODO: can we support :char ? :rational?
-      ;; :any id ;; assuming the value is compatible with transit. (do runtime check?; offer support for transit-realm instead of any?)
-      (throw (format/unsupported-exn realm)))
+      (realm-inspection/builtin-scalar? realm)
+      (case (realm-inspection/builtin-scalar-realm-id realm)
+        :number formatter/id ;; TODO: is this correct? transit-number?
+        :keyword formatter/id
+        :symbol formatter/id
+        :string formatter/id
+        :boolean formatter/id
+        :uuid (formatter/simple transit-uuid)
+        ;; TODO: can we support :char ? :rational?
+        ;; :any id ;; assuming the value is compatible with transit. (do runtime check?; offer support for transit-realm instead of any?)
+        (throw (format/unsupported-exn realm)))
 
-    ;; TODO: support transit-realm, edn-realm?
+      ;; TODO: support transit-realm, edn-realm?
 
-    (realm-inspection/integer-from-to? realm)
-    formatter/id
+      (realm-inspection/integer-from-to? realm)
+      formatter/id
 
-    (realm-inspection/real-range? realm)
-    formatter/id
+      (realm-inspection/real-range? realm)
+      formatter/id
 
-    (realm-inspection/sequence-of? realm)
-    (fn [resolve]
-      (ensure-transit realm sequential?
-                      (doall-lens (lens/mapl (resolve (realm-inspection/sequence-of-realm-realm realm))))))
+      (realm-inspection/sequence-of? realm)
+      (fn [resolve]
+        (ensure-transit realm sequential?
+                        (doall-lens (lens/mapl (resolve (realm-inspection/sequence-of-realm-realm realm))))))
 
-    (realm-inspection/set-of? realm)
-    (fn [resolve]
-      (ensure-transit realm set?
-                      (set-as-seq (lens/mapl (resolve (realm-inspection/set-of-realm-realm realm))))))
+      (realm-inspection/set-of? realm)
+      (fn [resolve]
+        (ensure-transit realm set?
+                        (set-as-seq (lens/mapl (resolve (realm-inspection/set-of-realm-realm realm))))))
 
-    (realm-inspection/map-with-keys? realm)
-    (fn [resolve]
-      (ensure-map-has-no-other-keys
-       realm
-       (lens/pattern (->> (realm-inspection/map-with-keys-realm-map realm)
-                          (map (fn [[k value-realm]]
-                                 (when-not (transit? k)
-                                   (throw (format/unsupported-exn k [realm])))
-                                 [(map-member k) (lens/>> (map-member k) (resolve value-realm))]))
-                          (into {})))))
+      (realm-inspection/map-with-keys? realm)
+      (fn [resolve]
+        (ensure-map-has-no-other-keys
+         realm
+         (lens/pattern (->> (realm-inspection/map-with-keys-realm-map realm)
+                            (map (fn [[k value-realm]]
+                                   (when-not (transit? k)
+                                     (throw (format/unsupported-exn k [realm])))
+                                   [(map-member k) (lens/>> (map-member k) (resolve value-realm))]))
+                            (into {})))))
 
-    (realm-inspection/map-of? realm)
-    (fn [resolve]
-      (ensure-transit realm map?
-                      (map-lens (resolve (realm-inspection/map-of-realm-key-realm realm))
-                                (resolve (realm-inspection/map-of-realm-value-realm realm)))))
+      (realm-inspection/map-of? realm)
+      (fn [resolve]
+        (ensure-transit realm map?
+                        (map-lens (resolve (realm-inspection/map-of-realm-key-realm realm))
+                                  (resolve (realm-inspection/map-of-realm-value-realm realm)))))
 
-    (realm-inspection/tuple? realm)
-    (fn [resolve]
-      (ensure-transit realm #(and (vector? %)
-                                  (= (count %) (count (realm-inspection/tuple-realm-realms realm))))
-                      (vector-lens (doall (map resolve (realm-inspection/tuple-realm-realms realm))))))
+      (realm-inspection/tuple? realm)
+      (fn [resolve]
+        (ensure-transit realm #(and (vector? %)
+                                    (= (count %) (count (realm-inspection/tuple-realm-realms realm))))
+                        (vector-lens (doall (map resolve (realm-inspection/tuple-realm-realms realm))))))
 
-    (realm-inspection/map-with-tag? realm)
-    ;; Note: we can check that the speficic key and value are transit?, but we have to assume the rest of the map is too. Can't help with translation.
-    (let [k (realm-inspection/map-with-tag-realm-key realm)
-          tag (realm-inspection/map-with-tag-realm-value realm)]
-      (when-not (transit? k)
-        (throw (format/unsupported-exn {:key k})))
-      (when-not (transit? tag)
-        (throw (format/unsupported-exn {:value tag})))
-      (formatter/simple (ensure-transit realm map? ;; TODO: no check for the tag?
-                                        lens/id)))
+      (realm-inspection/map-with-tag? realm)
+      ;; Note: we can check that the speficic key and value are transit?, but we have to assume the rest of the map is too. Can't help with translation.
+      (let [k (realm-inspection/map-with-tag-realm-key realm)
+            tag (realm-inspection/map-with-tag-realm-value realm)]
+        (when-not (transit? k)
+          (throw (format/unsupported-exn {:key k})))
+        (when-not (transit? tag)
+          (throw (format/unsupported-exn {:value tag})))
+        (formatter/simple (ensure-transit realm map? ;; TODO: no check for the tag?
+                                          lens/id)))
 
-    (realm-inspection/enum? realm)
-    (let [values (realm-inspection/enum-realm-values realm)]
-      ;; if the values are transit, we can format them as-is.
-      (doseq [v values]
-        (when-not (transit? v)
-          (throw (format/unsupported-exn v))))
-      formatter/id)
+      (realm-inspection/enum? realm)
+      (let [values (realm-inspection/enum-realm-values realm)]
+        ;; if the values are transit, we can format them as-is.
+        (doseq [v values]
+          (when-not (transit? v)
+            (throw (format/unsupported-exn v))))
+        formatter/id)
 
-    ;; TODO: support some kind of explicit transit-realm, edn-realm?
+      ;; TODO: support some kind of explicit transit-realm, edn-realm?
 
-    :else
-    (throw (format/unsupported-exn realm))))
+      :else
+      (throw (format/unsupported-exn realm)))))
 
 (defn- extended [realm]
   ;; Note: this does some checks on the transit values that are read,
@@ -310,18 +311,18 @@
     (realm-inspection/builtin-scalar? realm)
     (case (realm-inspection/builtin-scalar-realm-id realm)
       :any formatter/id ;; assuming the value is compatible with transit. (do runtime check?; offer support for transit-realm instead of any?)
-      (basic realm))
+      (basic-formatters realm))
 
     (realm-inspection/record? realm)
     #_(flat-record realm)
     ;; based on the tuple implementation
-    (let [base (basic (apply realm/tuple (map realm-inspection/record-realm-field-realm
-                                              (realm-inspection/record-realm-fields realm))))]
+    (let [base (basic-formatters (apply realm/tuple (map realm-inspection/record-realm-field-realm
+                                                         (realm-inspection/record-realm-fields realm))))]
       (fn [recurse]
         (record-as-tuple realm (base recurse))))
 
     :else
-    (basic realm)))
+    (basic-formatters realm)))
 
 (def ^{:doc "Translates values described by a realm to values usable by transit. The defaults cover most realms."} transit-format
   ;; Note: use this only when you are ok with the coupling that this introduces.
@@ -342,6 +343,6 @@
   (format/format ::transit
                  extended))
 
-(def transit-basic-format
-  (format/format ::transit-basic
-                 basic))
+#_(def transit-basic-format
+    (format/format ::transit-basic
+                   basic))
