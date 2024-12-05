@@ -27,26 +27,41 @@ between most of your data and a transit compatible form automatically:
 active.data.http.formats.transit/transit-format
 ```
 
-(TODO: Warning about potential coupling and when to (not) use this)
+Use this only if the coupling introduced by that is not an issue, or
+can be mitigated by other means.
 
-And some basic, less opinionated formatters that you can use as a
-basis to define the format of your API data:
+The coupling can for example be
+  
+- between producer and consumer code of the transit values, if
+  they are developed independently, or
+
+- between past and future versions of the code, if transit values are
+  written to some kind of databases, or if producer and consumer can
+  have different versions of the code.
+
+In those situations, you can define explicit translations for the
+realms that are defined in your code and thus are subject to potential
+change over time. You can use
 
 ```
 active.data.http.formats.transit/basic-formatters
 ```
 
-This includes things like formatting strings as strings, numbers as
-numbers, and sequences as vectors.
-(TODO: details)
+as a base for that, which includes formatters for things that are
+unlikely to change, like formatting strings as strings, numbers as
+numbers, and sequences as vectors, etc.
 
 ### Reitit coercion
 
-A reitit coercion based on realms and a format.
-TODO
+A reitit coercion based on realms and a format is available in the
+`active.data.http.reitit` namespace. This allows you to declare
+parameters and response bodies as realms, and have them automatically
+translated via the format.
 
 ```clojure
 (require '[active.data.http.reitit :as http-reitit])
+
+(def-record user [...])
 
 (def my-format ...)
 
@@ -59,16 +74,36 @@ TODO
         :coercion (http-reitit/realm-coercion my-format)}}]
 ```
 
-TODO required middleware
+See
+[active-data-translate](https://github.com/active-group/active-data-translate)
+on how to define formats.
+
+Note that to make this working you'll need a few middlewares for these
+routes. Namely the coersion middlewares, parameters-middleware and
+some transit middleware like muuntaja:
+
 ```
-[rrc/coerce-exceptions-middleware
- rrc/coerce-request-middleware
- rrc/coerce-response-middleware]
+{:middleware 
+ [reitit.ring.coercion/coerce-exceptions-middleware
+  reitit.ring.coercion/coerce-request-middleware
+  reitit.ring.coercion/coerce-response-middleware
+  reitit.ring.middleware.parameters/parameters-middlware]
+ :muuntaja :muuntaja muuntaja.core/instance}
 ```
+
+See Reitit documentation for more details on how this can be set up.
 
 ### RPCs
 
-TODO Intended to be used for 'internal apis' only.
+To make endpoints for a webclient served by the same server, and the
+usage of them even easier to set up, there is an "RPC"-like facility
+included in this library.
+
+It is intended for there kinds of "internal apis" only, where the
+coupling between the server and the client code is not an issue.
+
+To use this, you would first define the api in some shared code (cljc
+file):
 
 ```clojure
 (require '[active.data.http.rpc :as rpc #?(:cljs :include-macros true)])
@@ -77,6 +112,9 @@ TODO Intended to be used for 'internal apis' only.
 
 (rpc/defn-rpc get-user! internal-api :- user [id :- realm/integer])
 ```
+
+And define implementations for those rpcs in some server code, for
+example with reitit:
 
 ```clojure
 (require '[active.data.http.rpc.reitit :as rpc-reitit])
@@ -87,6 +125,11 @@ TODO Intended to be used for 'internal apis' only.
     [(rpc-reitit/impl get-user! db/get-user-from-db]))
 ```
 
+And finally to call those rpcs from the client side, for example with
+the [reacl-c](https://github.com/active-group/reacl-c) library, you
+would modify the shared api code to add a "caller" to the context like
+so:
+
 ```clojure
 (require '[active.data.http.rpc :as rpc #?(:cljs :include-macros true)])
 #?(:cljs (require '[active.data.http.rpc.reacl-c :as rpc-reacl-c]))
@@ -95,12 +138,18 @@ TODO Intended to be used for 'internal apis' only.
                       #?(:cljs (rpc/set-context-caller rpc-reacl-c/caller))))
 ```
 
+Which then enabled you to call the names defined by `defn-rpc` as a
+function to get a reacl-c request that can then be executed in various
+ways:
+
 ```clojure
 (require '[reacl-c-basics.ajax :as ajax])
 
 (ajax/fetch (get-user! 4711))
 ```
 
+See [https://github.com/active-group/reacl-c-basics](reacl-c-basics)
+for more details on that.
 
 ## License
 
