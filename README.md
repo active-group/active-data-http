@@ -39,7 +39,7 @@ The coupling can for example be
   written to some kind of databases, or if producer and consumer can
   have different versions of the code.
 
-In those situations, you can define explicit translations for the
+In those situations, you should define explicit translations for the
 realms that are defined in your code and thus are subject to potential
 change over time. You can use
 
@@ -78,32 +78,32 @@ See
 [active-data-translate](https://github.com/active-group/active-data-translate)
 on how to define formats.
 
-Note that to make this working you'll need a few middlewares for these
+Note that to get this working you'll need a few middlewares for these
 routes. Namely the coersion middlewares, parameters-middleware and
 some transit middleware like muuntaja:
 
-```
+```clojure
 {:middleware 
  [reitit.ring.coercion/coerce-exceptions-middleware
   reitit.ring.coercion/coerce-request-middleware
   reitit.ring.coercion/coerce-response-middleware
   reitit.ring.middleware.parameters/parameters-middlware]
- :muuntaja :muuntaja muuntaja.core/instance}
+ :muuntaja muuntaja.core/instance}
 ```
 
 See Reitit documentation for more details on how this can be set up.
 
 ### RPCs
 
-To make endpoints for a webclient served by the same server, and the
+To make endpoints for a webclient served by the same server and the
 usage of them even easier to set up, there is an "RPC"-like facility
 included in this library.
 
-It is intended for there kinds of "internal apis" only, where the
-coupling between the server and the client code is not an issue.
+It is intended for "internal apis" and shared code (cljc) only, where
+the coupling between the server and the client code is not an issue.
 
-To use this, you would first define the api in some shared code (cljc
-file):
+To use this, you would first define a so called context and the api in
+some shared code (cljc file):
 
 ```clojure
 (require '[active.data.http.rpc :as rpc #?(:cljs :include-macros true)])
@@ -113,7 +113,7 @@ file):
 (rpc/defn-rpc get-user! internal-api :- user [id :- realm/integer])
 ```
 
-And define implementations for those rpcs in some server code, for
+And define implementations for those RPCs in some server code, for
 example with reitit:
 
 ```clojure
@@ -125,7 +125,7 @@ example with reitit:
     [(rpc-reitit/impl get-user! db/get-user-from-db]))
 ```
 
-And finally to call those rpcs from the client side, for example with
+And finally to "call" those RPCs from the client side, for example with
 the [reacl-c](https://github.com/active-group/reacl-c) library, you
 would modify the shared api code to add a "caller" to the context like
 so:
@@ -138,8 +138,8 @@ so:
                       #?(:cljs (rpc/set-context-caller rpc-reacl-c/caller))))
 ```
 
-Which then enabled you to call the names defined by `defn-rpc` as a
-function to get a reacl-c request that can then be executed in various
+Which then enables you to call the names defined by `defn-rpc` as a
+function to get a reacl-c request, which can then be executed in various
 ways:
 
 ```clojure
@@ -148,7 +148,7 @@ ways:
 (ajax/fetch (get-user! 4711))
 ```
 
-See [https://github.com/active-group/reacl-c-basics](reacl-c-basics)
+See [reacl-c-basics](https://github.com/active-group/reacl-c-basics)
 for more details on that.
 
 ## License
