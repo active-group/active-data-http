@@ -35,7 +35,6 @@
 (defn- listener [backend]
   (reify ws.protocols/Listener
     (on-open    [_ socket]
-      (println (pr-str socket))
       (swap! (connections backend) conj socket))
     (on-close   [_ socket _status _reason]
       (swap! (connections backend) disj socket))
