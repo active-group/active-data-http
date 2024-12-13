@@ -1,6 +1,7 @@
 (ns active.data.http.ajax-test
   (:require [active.data.http.ajax :as sut]
             [active.data.translate.format :as format]
+            [active.data.translate.formatter :as formatter]
             [ajax.core :as ajax :include-macros true]
             [active.data.http.shared-example :as ex]
             [active.data.realm :as realm]
@@ -113,8 +114,8 @@
 (t/deftest get-params-test
   (let [query-params-format
         (format/format :my-string-format
-                       {realm/string (format/simple (lens/xmap string/reverse string/reverse))
-                        realm/integer (format/simple (lens/xmap inc dec))})
+                       {realm/string (formatter/simple (lens/xmap string/reverse string/reverse))
+                        realm/integer (formatter/simple (lens/xmap inc dec))})
 
         [raw-request _result]
         (with-interceptor
