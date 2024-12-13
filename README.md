@@ -151,6 +151,57 @@ ways:
 See [reacl-c-basics](https://github.com/active-group/reacl-c-basics)
 for more details on that.
 
+### Signals
+
+Signals are (small) pieces of data sent by the server to your fat
+webclient, for example to inform it that new data is available. It is
+not recommended to send that data itself, but to fetch that data
+separately after receiving a signal to do so.
+
+To add that to your shared internal api, you can write something like
+this:
+
+```clojure
+(require '[active.data.http.signals :as signals])
+
+(def wakeup-signal ::wakeup)
+
+(defonce signals-context
+  (signals/context "/api/internal-signals"
+                   (realm/enum wakeup-signal)))
+```
+
+Note: the context has some internal state, so it is recommended to use
+`defonce` for it.
+
+To add the necessary endpoints to a reitit router use
+
+```clojure
+(require '[active.data.http.signals.reitit :as signals.reitit])
+
+(signals.reitit/router api/signals-context)
+```
+
+To actually signal something
+
+```clojure
+(require '[active.data.http.signals :as signals])
+
+(signals/broadcast! api/signals-context api/wakeup-signal)
+```
+
+And to receive signals when using [reacl-c](https://github.com/active-group/reacl-c):
+
+```clojure
+(require '[active.data.http.signals.reacl-c :as signals])
+
+;; an item that emits the current timestamp when a wakeup is received
+(signals/receive api/signals-context api/wakeup-signals)
+```
+
+Note that signals use websockets under the hood, so you need a recent
+version of ring and a ring-adapter that supports websockets.
+
 ## License
 
 Copyright © 2024 Active Group GmbH
