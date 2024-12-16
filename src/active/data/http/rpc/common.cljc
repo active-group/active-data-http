@@ -1,6 +1,7 @@
 (ns ^:no-doc active.data.http.rpc.common
   (:require [active.data.record :as r #?@(:cljs [:include-macros true])]
-            [active.data.realm :as realm]))
+            [active.data.realm :as realm])
+  #?(:clj (:import [java.net URLEncoder])))
 
 (r/def-record context
   [context-format ;; format/format
@@ -19,10 +20,14 @@
   (if-let [c (context-create-caller (rpc-context rpc))]
     (c rpc)
     (fn [& _args]
-      (throw (ex-info "RPC cannot be called as a function. Define a calling conventin in the context." {})))))
+      (throw (ex-info "RPC cannot be called as a function. Define a calling convention in the context to enable this." {})))))
+
+(defn- mangle-name [s]
+  #?(:clj (URLEncoder/encode s "UTF-8"))
+  #?(:cljs (js/encodeURIComponent s)))
 
 (defn rpc-path [rpc]
-  (str (rpc-name rpc)))
+  (mangle-name (str (rpc-name rpc))))
 
 (defn rpc-full-path [rpc]
   (if-let [cp (not-empty (context-path (rpc-context rpc)))]
