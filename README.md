@@ -119,8 +119,8 @@ example with reitit:
 ```clojure
 (require '[active.data.http.rpc.reitit :as rpc-reitit])
 
-(def app
-  (rpc-reitit/context-router
+(def routes
+  (rpc-reitit/context-routes
     internal-api
     [(rpc-reitit/impl get-user! db/get-user-from-db]))
 ```
@@ -166,7 +166,7 @@ this:
 
 (def wakeup-signal ::wakeup)
 
-(defonce signals-context
+(defonce signals
   (signals/context "/api/internal-signals"
                    (realm/enum wakeup-signal)))
 ```
@@ -174,12 +174,13 @@ this:
 Note: the context has some internal state, so it is recommended to use
 `defonce` for it.
 
-To add the necessary endpoints to a reitit router use
+To get the necessary reitit routes use
 
 ```clojure
 (require '[active.data.http.signals.reitit :as signals.reitit])
 
-(signals.reitit/router api/signals-context)
+(def routes
+  (signals.reitit/context-routes api/signals))
 ```
 
 To actually signal something
@@ -187,7 +188,7 @@ To actually signal something
 ```clojure
 (require '[active.data.http.signals :as signals])
 
-(signals/broadcast! api/signals-context api/wakeup-signal)
+(signals/broadcast! api/signals api/wakeup-signal)
 ```
 
 And to receive signals when using [reacl-c](https://github.com/active-group/reacl-c):
@@ -196,7 +197,7 @@ And to receive signals when using [reacl-c](https://github.com/active-group/reac
 (require '[active.data.http.signals.reacl-c :as signals])
 
 ;; an item that emits the current timestamp when a wakeup is received
-(signals/receive api/signals-context api/wakeup-signals)
+(signals/receive api/signals api/wakeup-signals)
 ```
 
 Note that signals use websockets under the hood, so you need a recent
