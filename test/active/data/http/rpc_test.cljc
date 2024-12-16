@@ -70,7 +70,6 @@
          (t/is (= {:uri "/internal-api/my-plus"
                    :method "POST"
                    :format :transit
-                   :response-format :transit
                    :params {:args [[1] 2]}}
                   (simulate-request call)))
 
@@ -80,6 +79,5 @@
        (t/is (= {:uri "/internal-api/no-arg-fn"
                  :method "POST"
                  :format :transit
-                 :response-format :transit
                  :params {:args []}}
                 (simulate-request (no-arg-fn)))))))
