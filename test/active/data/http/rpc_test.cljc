@@ -22,12 +22,13 @@
 #?(:clj
    (do
      (def my-router
-       (reitit/context-router
-        my-api
-        [(reitit/impl #'my-plus (fn [x y]
-                                  (dummy-int d-x (+ (d-x x) y))))
-         (reitit/impl #'no-arg-fn (fn []
-                                    "foo"))]))
+       (ring/router
+        (reitit/context-routes
+         my-api
+         [(reitit/impl #'my-plus (fn [x y]
+                                   (dummy-int d-x (+ (d-x x) y))))
+          (reitit/impl #'no-arg-fn (fn []
+                                     "foo"))])))
 
      (def my-app
        (ring/ring-handler my-router))))

@@ -1,12 +1,10 @@
 (ns active.data.http.signals.reitit
   (:require [active.data.http.signals.common :as c]
-            [active.data.http.signals.ring :as ring]
-            [reitit.ring :as reitit-ring]))
+            [active.data.http.signals.ring :as ring]))
 
-(defn router [context & [opts]]
-  (let [backend (c/server-backend context)]
-    (let [endpoint {:handler (ring/upgrade-handler backend)}]
-      (reitit-ring/router
-       [(ring/route backend) {:get endpoint
-                              :post endpoint}]
-       opts))))
+(defn context-routes [context]
+  (let [backend (c/server-backend context)
+        endpoint {:handler (ring/upgrade-handler backend)}]
+    [(ring/route backend) {:get endpoint
+                           :post endpoint}]))
+

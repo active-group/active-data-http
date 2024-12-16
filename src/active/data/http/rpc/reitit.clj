@@ -1,7 +1,6 @@
 (ns active.data.http.rpc.reitit
   (:require [active.data.http.rpc :as rpc]
             [active.data.http.rpc.common :as common]
-            [reitit.ring :as ring]
             [reitit.ring.coercion :as rrc]
             [active.data.http.reitit :as reitit]))
 
@@ -51,50 +50,46 @@ return value exaclty as declared in the rpc declaration via
                                 {:status 200
                                  :body (apply handler (:args request))})}))
 
-(defn- context-routes [context implementations]
+(defn- context-routes* [context implementations]
   ;; TODO: assert all implemented rpcs are from this context?
   ;; TODO: need to set/fix transit?
   (assert (= :transit (common/context-underlying-format context)))
   [(common/context-path context) (vec implementations)])
 
-(defn context-router
-  "Returns a [[reitit.ring/router]] defining routes that implement the
+(defn context-routes
+  "Returns a reitit routes vector defining routes that implement the
    given rpcs. Use [[impl]] or [[impl-ext]] to specify the
    implementations. The `opts` parameter is the same as for [[reitit.ring/router]].
 
   ```
-  (context-router my-api/context [(impl #'my-api/plus +)])
+  (context-routes my-api/context [(impl #'my-api/plus +)])
   ```
 
   Important note: To use this, you need a transit parser middleware in
   your middleware chain, like muuntaja for example
   [https://github.com/metosin/reitit/blob/master/doc/ring/content_negotiation.md].
   
-  You can add this higher up, or via the `opts` parameter like
+  You can add this higher up, for example like this:
   ```
-  {:data {:muuntaja muuntaja.core/instance
-          :middleware [reitit.ring.middleware.muuntaja/format-middleware]}}
+  [\"\" {:muuntaja muuntaja.core/instance
+         :middleware [reitit.ring.middleware.muuntaja/format-middleware]}
+   (context-routes ...)]
   ```
 
   You will also need to add
   [[reitit.ring.middleware.parameters/parameters-middleware]] to you
   middlware chain. If you don't need it anywhere else in your
-  application, set it via the `opts` too:
+  application anyway, add it like this:
 
   ```
-  {:data {:middleware [reitit.ring.middleware.parameters/parameters-middlware]}}
+  [\"\" {:middleware [reitit.ring.middleware.parameters/parameters-middlware]}
+   (context-routes ...)]
   ```"
-  ([context implementations]
-   (context-router context implementations nil))
-  ([context implementations opts]
-   (ring/router
-    (context-routes context implementations)
-    (merge opts
-           {:data (merge (:data opts)
-                         {:coercion (reitit/realm-coercion (common/context-format context))
-                          :middleware (vec (concat (:middleware (:data opts))
-                                                   ;; Note: coerce-exceptions: "turns coercion exceptions into pretty responses"
-                                                   ;; ...not ideal, but better than empty responses, which we get otherwise.
-                                                   [rrc/coerce-exceptions-middleware
-                                                    rrc/coerce-request-middleware
-                                                    rrc/coerce-response-middleware]))})}))))
+  [context implementations]
+  ["" {:coercion (reitit/realm-coercion (common/context-format context))
+       ;; Note: coerce-exceptions: "turns coercion exceptions into pretty responses"
+       ;; ...not ideal, but better than empty responses, which we get otherwise.
+       :middleware [rrc/coerce-exceptions-middleware
+                    rrc/coerce-request-middleware
+                    rrc/coerce-response-middleware]}
+   (context-routes* context implementations)])
