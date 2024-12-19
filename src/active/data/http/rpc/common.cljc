@@ -23,7 +23,7 @@
       (throw (ex-info "RPC cannot be called as a function. Define a calling convention in the context to enable this." {})))))
 
 (defn- mangle-name [s]
-  #?(:clj (URLEncoder/encode s "UTF-8"))
+  #?(:clj (URLEncoder/encode ^String s "UTF-8"))
   #?(:cljs (js/encodeURIComponent s)))
 
 (defn rpc-path [rpc]
