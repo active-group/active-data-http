@@ -3,7 +3,7 @@
 
 The goal of this library is to facilitate using data described by
 [realms](https://github.com/active-group/active-data) in web
-applications contexts, i.e. when transpoting data via http.
+applications contexts, i.e. when transporting data via http.
 
 [Latest Version](https://clojars.org/de.active-group/active-data-http)
 
@@ -122,7 +122,7 @@ example with reitit:
 (def routes
   (rpc-reitit/context-routes
     internal-api
-    [(rpc-reitit/impl get-user! db/get-user-from-db]))
+    [(rpc-reitit/impl get-user! db/get-user-from-db)]))
 ```
 
 And finally to "call" those RPCs from the client side, for example with
