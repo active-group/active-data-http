@@ -50,7 +50,15 @@
   (fn [resolve]
     (optional-lens (resolve realm))))
 
-(def ^{:doc "Defines a default format for string coercions, used for path and query parameters. Only supports realm that have an 'obvious' string representation, and `nil` for optionals."}
+(defn- checked-constants-lens [constants]
+  (lens/xmap (fn [v]
+               (if (contains? constants v)
+                 v
+                 (throw (format/format-error (str "Not in set " (pr-str constants)) v))))
+             identity))
+
+(def ^{:doc "Defines a default format for string coercions, used for path and query parameters.
+  Only supports realms that have an 'obvious' string representation, and `nil` for optionals."}
   default-string-format
   (format/format ::default-string-format
                  (let [m {realm/string (formatter/simple string-lens)
@@ -61,17 +69,17 @@
                        (realm-inspection/optional? realm)
                        (optional-formatter (realm-inspection/optional-realm-realm realm))
 
-                       ;; TODO: maybe we can support a bit more, and unions, enums. But not everything can be supported (not as much as for bodies)
-
                        ;; ranged integer?
-                       ;; named delay?
-                       ;; restricted, if we support the base realm?
+                       ;; named, delay?
+                       ;; restricted/intersection, if we support the base realm?
 
-                       #_#_(realm-inspection/enum? realm)
-                         (let [vals (realm-inspection/enum-realm-values realm)]
-                           (if (every? string? vals) ;; TODO: or the other things that have representations?
-                             ))
-                       ;; (realm-inspection/union? realm) of the realms we support otherwise
+                       (realm-inspection/enum? realm)
+                       (let [vals (realm-inspection/enum-realm-values realm)]
+                         (if (every? string? vals) ;; TODO: or the other things that have representations?
+                           (formatter/simple (checked-constants-lens (realm-inspection/enum-realm-values realm)))
+                           nil))
+
+                       ;; (realm-inspection/union? realm) of the realms we support otherwise?
 
                        :else
                        (m realm))))))
