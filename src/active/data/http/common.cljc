@@ -6,7 +6,9 @@
 
 (def ^:private uuid-lens
   (lens/xmap (fn [s]
-               (or (parse-uuid s) s))
+               (if (string? s)
+                 (or (parse-uuid s) s)
+                 (throw (format/format-error "Not a uuid string" s))))
              (fn [uuid]
                (assert (uuid? uuid) uuid)
                (str uuid))))
@@ -15,16 +17,14 @@
   #?(:cljs (lens/xmap (fn [s]
                         (let [r (js/parseInt s 10)]
                           (if (js/isNaN r)
-                            s
+                            (throw (format/format-error "Not an integer" s))
                             r)))
                       (fn [i]
                         (.toString i)))
      :clj (lens/xmap (fn [s]
                        (try (Integer/parseInt s)
                             (catch NumberFormatException _e
-                              ;; TODO: we should have validating formats, and non-validating formats.
-                              ;; ?? (format/runtime-error )
-                              s)))
+                              (throw (format/format-error "Not an integer" s)))))
                      (fn [i]
                        (Integer/toString i)))))
 
