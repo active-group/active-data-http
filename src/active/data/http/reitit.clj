@@ -4,13 +4,9 @@
             [active.data.realm.inspection :as realm-inspection]
             [active.data.http.common :as common]
             [active.data.realm :as realm]
-            [active.data.record :as record]
-            [reitit.coercion :as coercion]
-            [clojure.set :as set]))
+            [reitit.coercion :as coercion]))
 
-(defrecord ^:private MapModel [map open?])
-
-(defrecord ^:private RealmModel [to from])
+(defrecord ^:private RealmModel [realm open?])
 
 (defn- wrap-coercion-errors [thunk]
   ;; turn format errors into coercion errors
@@ -26,54 +22,61 @@
            (coercion/map->CoercionError
             {:problems [(.getMessage ^Exception e)]})))))
 
-(defn- realm-model [format realm]
-  (let [realm (realm/compile realm)]
-    (map->RealmModel
-     {:from (core/translator-from realm format)
-      :to (core/translator-to realm format)})))
+(defn- add-problems [coercion-error1 coercion-error2]
+  (update coercion-error1 :problems concat (:problems coercion-error2)))
 
-(defn- compile-model [body-format string-format model _name]
-  ;; Note: model may be {:foo realm} for query and path parameters
-  ;; 'open-model' may be called too (for path or for what?)
-  (cond
-    (or (realm-inspection/realm? model) (record/record? model))
-    (realm-model body-format model)
+(defn- compile-model [model _name]
+  ;; Note: model is what the user has given in the spec - may be {:foo realm} for query and path parameters, or any realm for bodies.
+  (RealmModel. (if (and (map? model)
+                        (not (realm-inspection/realm? model)))
+                 (realm/map-with-keys model)
+                 (realm/compile model))
+               false))
 
-    (map? model)
-    (do (assert (every? keyword? (keys model)))
-        (MapModel. (->> model
-                        (map (fn [[key model]]
-                               [key (realm-model string-format model)]))
-                        (into {}))
-                   false))
+(defn- convert-closed-map [format realm-map value]
+  (reduce-kv (fn [res k realm]
+               ;; TODO: add 'k' to the coercion error message
+               ;; Note: if k is absent, v becomes nil, and if the realm is an optional it should pass => optional value realm means optional key.
+               (let [v (get value k nil)
+                     r (wrap-coercion-errors #((core/translator-to realm format) v))]
+                 (if (coercion/error? r)
+                   (if (coercion/error? res)
+                     (add-problems res r)
+                     r)
+                   (assoc res k r))))
+             {}
+             realm-map))
 
-    :else
-    (assert false (str "Invalid model: " (pr-str model)))))
+(defn- convert-map [format model value _format]
+  ;; Note: _format can be 'application/transit+json' for example; not needed here.
+  (let [realm (:realm model)
+        open? (:open? model)]
+    (assert (realm-inspection/map-with-keys? realm))
+    (let [realm-map (realm-inspection/map-with-keys-realm-map realm)]
+      ;; Note: we convert value-by-value, because the maps are implicit for path-params etc. The format cannot and should not decide how it looks like.
+      (if open?
+        ;; means that the value should be allowed to contain more keys than given. (afaik)
+        (do
+          (assert (realm-inspection/map-with-keys? realm) "Only map models can be open models.")
+          (let [known-keys (keys realm-map)
+                known (select-keys value known-keys)
+                unconverted (if (empty? known-keys)
+                              value
+                              (apply dissoc value known-keys))
+                converted (convert-closed-map format realm-map known)]
+            (if (coercion/error? converted)
+              converted
+              (merge unconverted converted))))
+        (convert-closed-map format realm-map value)))))
 
-(defn- convert-to-model [model value _format]
-  ;; Note: format can be 'application/transit+json' for example; not needed here.
-  (condp instance? model
-    RealmModel
-    (wrap-coercion-errors #((:to model) value))
-
-    MapModel
-    (let [known (reduce-kv (fn [res key model]
-                             (let [r (convert-to-model model (get value key) nil)]
-                               (if (coercion/error? r)
-                                 (reduced r)
-                                 (assoc res key r))))
-                           {}
-                           (:map model))]
-      (if (coercion/error? known)
-        known
-        (if (:open? model)
-          (merge value known)
-          (if (> (count value) (count known))
-            (coercion/map->CoercionError
-             {:problems [(str "Undefined parameters: " (apply str (interpose ", " (set/difference (set (keys value)) (set (keys known))))))]})
-            known))))
-
-    :else (assert false model)))
+(defn- convert [format model value _format]
+  ;; Note: _format can be 'application/transit+json' for example; not needed here.
+  (assert (instance? RealmModel model) model)
+  (let [realm (:realm model)
+        open? (:open? model)]
+    (assert (not open?)) ;; TODO: proper error (maybe allow, if realm is realm-with-keys map?)
+    (wrap-coercion-errors (fn []
+                            ((core/translator-to realm format) value)))))
 
 (defn realm-coercion
   "Returns a reitit coercion based on realms and the given realm formatter."
@@ -94,25 +97,25 @@
         (assert (= 1 (count model)) "TODO: what do multiple models mean?")
         (->> model
              (map (fn [model]
-                    (compile-model body-format string-format model name)))
+                    (compile-model model name)))
              (first)))
-
       (-open-model [_this model]
-        (if (instance? MapModel model)
-          (assoc model :open? true)
-          (assert false (str "Cannot open a realm model: " model))))
+        ;; this is called for query and form parameter coercion.
+        (assert (instance? RealmModel model))
+        (assoc model :open? true))
       (-encode-error [_this error]
         ;; error is the content of coercion/map->CoercionError here
         error)
       (-request-coercer [_this type model]
         ;; model is the result of compile-model
+        ;; type should be :body or :string
         (case type
-          :body (partial convert-to-model model)
-          :string (partial convert-to-model model)
-          (assert false (str "type: " type))))
+          :body (partial convert body-format model)
+          :string (partial convert-map string-format model)))
       (-response-coercer [_this model]
         ;; model is the result of compile-model here
         (assert (instance? RealmModel model))
-        (fn [value _format]
-          ;; Note: format can be 'application/transit+json' for example; not needed here.
-          (wrap-coercion-errors #((:from model) value)))))))
+        (let [from (core/translator-from (:realm model) body-format)]
+          (fn [value _format]
+            ;; Note: format can be 'application/transit+json' for example; not needed here.
+            (wrap-coercion-errors #(from value))))))))
