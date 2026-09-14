@@ -1,11 +1,10 @@
 (ns active.data.http.ajax-test
   (:require [active.data.http.ajax :as sut]
-            [active.data.translate.format :as format]
             [active.data.translate.formatter :as formatter]
+            [active.data.translate.translator :as translator]
             [ajax.core :as ajax :include-macros true]
             [active.data.http.shared-example :as ex]
             [active.data.realm :as realm]
-            [active.clojure.lens :as lens]
             [clojure.string :as string]
             [clojure.test :as t :include-macros true]
             [cognitect.transit :as ctransit]
@@ -113,9 +112,8 @@
 
 (t/deftest get-params-test
   (let [query-params-format
-        (format/format :my-string-format
-                       {realm/string (formatter/simple (lens/xmap string/reverse string/reverse))
-                        realm/integer (formatter/simple (lens/xmap inc dec))})
+        {realm/string (formatter/simple (translator/translator string/reverse string/reverse realm/string))
+         realm/integer (formatter/simple (translator/translator inc dec realm/integer))}
 
         [raw-request _result]
         (with-interceptor

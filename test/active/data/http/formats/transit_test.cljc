@@ -1,53 +1,53 @@
 (ns active.data.http.formats.transit-test
   (:require [active.data.http.formats.transit :as sut]
-            [active.data.translate.core :as core]
+            [active.data.translate.core :as translate]
             [active.data.realm :as realm]
             [active.data.record :as r #?@(:cljs [:include-macros true])]
-            [clojure.test :as t #?@(:cljs [:include-macros true])]
-            [active.data.translate.format :as format]))
+            [clojure.test :as t #?@(:cljs [:include-macros true])]))
 
 ;; TODO: clojurescript. and interop between clj and cljs (via transit values)
 
 (defn translate-to [realm format value]
-  ((core/translator-to realm format) value))
+  ((translate/from-extern realm format) value))
 
 (defn translate-from [realm format value]
-  ((core/translator-from realm format) value))
+  ((translate/to-extern realm format) value))
 
 (defn roundtrip [realm v]
-  (translate-to realm sut/transit-format
-                (translate-from realm sut/transit-format v)))
+  (translate-to realm sut/extended
+                (translate-from realm sut/extended v)))
 
 (t/deftest empty-map-test
   (let [realm (realm/map-of realm/integer realm/integer)
         v {}
         t {}]
-    (t/is (= t (translate-from realm sut/transit-format v)))
-    (t/is (= v (translate-to realm sut/transit-format t)))))
+    (t/is (= t (translate-from realm sut/extended v)))
+    (t/is (= v (translate-to realm sut/extended t)))))
 
 (t/deftest void-result-test
   (let [realm (realm/map-with-keys {:result (realm/enum nil)})
         v {:result nil}
-        t {:result nil}]
-    (t/is (= t (translate-from realm sut/transit-format v)))
-    (t/is (= v (translate-to realm sut/transit-format t)))))
+        t {:result nil}
+        format sut/extended]
+    (t/is (= t (translate-from realm format v)))
+    (t/is (= v (translate-to realm format t)))))
 
 (t/deftest tuple-test
   (let [realm (realm/tuple realm/string realm/integer)
         v ["foo" 42]
         t ["foo" 42]]
-    (t/is (vector? (translate-from realm sut/transit-format v)))
-    (t/is (= t (translate-from realm sut/transit-format v)))
+    (t/is (vector? (translate-from realm sut/extended v)))
+    (t/is (= t (translate-from realm sut/extended v)))
 
-    (t/is (vector? (translate-to realm sut/transit-format t)))
-    (t/is (= v (translate-to realm sut/transit-format t)))
+    (t/is (vector? (translate-to realm sut/extended t)))
+    (t/is (= v (translate-to realm sut/extended t)))
 
-    (t/is (format/format-error? (try (translate-to realm sut/transit-format :foo)
-                                     (catch #?(:clj Exception :cljs :default) e e))))))
+    (t/is (translate/format-error? (try (translate-to realm sut/extended :foo)
+                                        (catch #?(:clj Exception :cljs :default) e e))))))
 
 (t/deftest empty-tuple-test
-  (t/is (= [] (translate-from (realm/tuple) sut/transit-format [])))
-  (t/is (vector? (translate-from (realm/tuple) sut/transit-format []))))
+  (t/is (= [] (translate-from (realm/tuple) sut/extended [])))
+  (t/is (vector? (translate-from (realm/tuple) sut/extended []))))
 
 (r/def-record rec-ab
   [rec-a :- realm/string

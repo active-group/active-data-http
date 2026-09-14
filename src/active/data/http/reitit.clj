@@ -1,5 +1,5 @@
 (ns active.data.http.reitit
-  (:require [active.data.translate.core :as core]
+  (:require [active.data.translate.core :as translate]
             [active.data.translate.format :as format]
             [active.data.realm.inspection :as realm-inspection]
             [active.data.http.common :as common]
@@ -14,7 +14,7 @@
   (try (thunk)
        (catch Exception e
          (cond
-           (format/format-error? e)
+           (translate/format-error? e)
            (coercion/map->CoercionError
             {:problems [(ex-message e)]})
 
@@ -38,7 +38,7 @@
                ;; TODO: add 'k' to the coercion error message
                ;; Note: if k is absent, v becomes nil, and if the realm is an optional it should pass => optional value realm means optional key.
                (let [v (get value k nil)
-                     r (wrap-coercion-errors #((core/translator-to realm format) v))]
+                     r (wrap-coercion-errors #((translate/from-extern realm format) v))]
                  (if (coercion/error? r)
                    (if (coercion/error? res)
                      (add-problems res r)
@@ -76,7 +76,7 @@
         open? (:open? model)]
     (assert (not open?)) ;; TODO: proper error (maybe allow, if realm is realm-with-keys map?)
     (wrap-coercion-errors (fn []
-                            ((core/translator-to realm format) value)))))
+                            ((translate/from-extern realm format) value)))))
 
 (defn realm-coercion
   "Returns a reitit coercion based on realms and the given realm formatter."
@@ -115,7 +115,7 @@
       (-response-coercer [_this model]
         ;; model is the result of compile-model here
         (assert (instance? RealmModel model))
-        (let [from (core/translator-from (:realm model) body-format)]
+        (let [from (translate/to-extern (:realm model) body-format)]
           (fn [value _format]
             ;; Note: format can be 'application/transit+json' for example; not needed here.
             (wrap-coercion-errors #(from value))))))))

@@ -1,10 +1,10 @@
 (ns active.data.http.ajax
   (:require [ajax.core :as ajax]
-            [active.data.translate.core :as core]
+            [active.data.translate.core :as translate]
             [active.data.http.common :as common]))
 
 (defn- request-body-interceptor [format request-realm]
-  (let [from (core/translator-from request-realm format)]
+  (let [from (translate/to-extern request-realm format)]
     (ajax/to-interceptor {:name "active-data realm translate request"
                           :request (fn [request]
                                      ;; :body overrides :params
@@ -16,7 +16,7 @@
 (defn- request-query-interceptor [format request-realms]
   (let [froms (->> request-realms
                    (map (fn [[key realm]]
-                          [key (core/translator-from realm format)]))
+                          [key (translate/to-extern realm format)]))
                    (into {}))]
     (ajax/to-interceptor {:name "active-data realm translate query"
                           :request (fn [request]
@@ -31,7 +31,7 @@
                                                             froms)))))})))
 
 (defn response-wrapper [format response-realm]
-  (let [to (core/translator-to response-realm format)]
+  (let [to (translate/from-extern response-realm format)]
     (fn [handler]
       (when handler
         (comp handler to)))))

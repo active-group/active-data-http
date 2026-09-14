@@ -14,7 +14,7 @@
   ;; Note: for now we expect the format to support all that is used by
   ;; common.request/response, i.e. map-with-keys and tuple (could add
   ;; that explicitly if needed)
-  (common/context {common/context-format (or realm-format transit/transit-format)
+  (common/context {common/context-format (or realm-format transit/extended)
                    common/context-underlying-format (or underlying :transit)
                    common/context-path path
                    ;; e.g. pass active.data.http.rpc.reacl-c/caller as the caller for cljs (default nil to not have the depedency)
