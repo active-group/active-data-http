@@ -1,6 +1,5 @@
 (ns active.data.http.reitit
   (:require [active.data.translate.core :as translate]
-            [active.data.translate.format :as format]
             [active.data.realm.inspection :as realm-inspection]
             [active.data.http.common :as common]
             [active.data.realm :as realm]
@@ -54,6 +53,7 @@
     (assert (realm-inspection/map-with-keys? realm))
     (let [realm-map (realm-inspection/map-with-keys-realm-map realm)]
       ;; Note: we convert value-by-value, because the maps are implicit for path-params etc. The format cannot and should not decide how it looks like.
+      ;; Also, 'value' can easily be nil for form params and others; should be equivalent to an empty map here.
       (if open?
         ;; means that the value should be allowed to contain more keys than given. (afaik)
         (do
