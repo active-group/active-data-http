@@ -2,6 +2,8 @@
   (:require [active.data.translate.core :as translate]
             [active.data.translate.format :as format]
             [active.data.realm.inspection :as realm-inspection]
+            [active.data.http.swagger :as swagger]
+            [active.data.http.json-schema :as json-schema]
             [active.data.http.common :as common]
             [active.data.realm :as realm]
             [reitit.coercion :as coercion]))
@@ -78,6 +80,13 @@
     (wrap-coercion-errors (fn []
                             ((translate/from-extern realm format) value)))))
 
+(defn realm-model->external-realm [realm-model format]
+  (assert (instance? RealmModel realm-model))
+  (translate/external-realm (:realm realm-model) format))
+
+(defn- realm-model-or-nil? [thing]
+  (or (nil? thing) (instance? RealmModel thing)))
+
 (defn realm-coercion
   "Returns a reitit coercion based on realms and the given realm formatter."
   ;; TODO: more docstring
@@ -85,13 +94,47 @@
   [body-format & {string-format :strings}]
   ;; see https://github.com/metosin/reitit/blob/ff99ab3ff929ca1b5fd7446d72d1a6eb07668795/modules/reitit-core/src/reitit/coercion.cljc#L39
   ;; for type/open/keywordize
-  (let [string-format (or string-format common/default-string-format)]
+  (let [string-format (or string-format common/default-string-format)
+        coercion-name :active.data.http]
     (reify coercion/Coercion
-      (-get-name [_this] :active.data.http)
+      (-get-name [_this] coercion-name)
       (-get-options [_this] nil)
-      ;; doesn't support apidocs yet (and maybe it can't)
-      (-get-apidocs [_this _specification _data] nil)
-      (-get-model-apidocs [_this _specificat _model _options] nil)
+      (-get-apidocs [_this specification {:keys [parameters responses]}]
+        (assert (every? realm-model-or-nil? (select-keys parameters [:body :query :header])))
+        (assert (every? realm-model-or-nil? (map :body (vals responses))))
+        (case specification
+          :swagger
+          (let [body-realm (some-> parameters :body (realm-model->external-realm body-format))
+                query-realm (some-> parameters :query (realm-model->external-realm string-format))
+                header-realm (some-> parameters :header (realm-model->external-realm string-format))
+                responses-realm (->> responses
+                                     (map (fn [[status response]]
+                                            [status (update response :body #(realm-model->external-realm % body-format))]))
+                                     (into {}))]
+            (swagger/swagger-spec body-realm
+                                  query-realm
+                                  header-realm
+                                  responses-realm))
+          (throw
+           (ex-info
+            (str "Can't produce Realm apidocs for " specification)
+            {:type specification, :coercion coercion-name}))))
+      (-get-model-apidocs [_this specification model options]
+        (assert (instance? RealmModel model))
+        (case specification
+          :openapi (if (= :parameter (:type options))  ; TODO: What are the `:type`s? Should maybe be a `(case (:type options) ...)`.
+                     (let [realm (realm-model->external-realm model
+                                                              string-format)]
+                       (when-not (realm-inspection/map-with-keys? realm)
+                         (println "WARNING: Unsupported realm for OpenAPI (expected map-with-keys realm)" (select-keys options [:in :parameter]) realm))
+                       (json-schema/json-schema-from-realm realm))
+                     (json-schema/json-schema-from-realm (realm-model->external-realm model
+                                                                                      body-format)))
+          (throw
+           (ex-info
+            (str "Can't produce Realm apidocs for " specification)
+            {:type specification, :coercion coercion-name}))))
+
       (-compile-model [_this model name]
         ;; model will be a sequence of realms here, or maps for query/path params
         (assert (= 1 (count model)) "TODO: what do multiple models mean?")
