@@ -20,7 +20,7 @@
 
 (defn create-backend [uri signals-realm format]
   (let [to-string (comp to-transit-str
-                        (translate/translator-from signals-realm format))
+                        (translate/to-extern signals-realm format))
         conns (atom #{})]
     (RingBackend c/broadcast-fn (fn [signal]
                                   ;; translate to str or binary.

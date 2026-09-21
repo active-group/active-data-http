@@ -9,7 +9,7 @@
   [])
 
 (defn- create-ws [uri signals-realm format on-open on-close on-message]
-  (let [from-string (comp (translate/translator-to signals-realm format)
+  (let [from-string (comp (translate/from-extern signals-realm format)
                           (partial transit/read (transit/reader :json)))]
     (doto (js/WebSocket. uri)
       ;; The error event is fired when a connection with a WebSocket has
