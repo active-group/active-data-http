@@ -1,93 +1,88 @@
 (ns active.data.http.common
   (:require [active.data.translate.formatter :as formatter]
             [active.data.translate.translator :as translator]
+            [active.data.http.realms :as realms]
             [active.data.realm :as realm]
             [active.data.realm.inspection :as realm-inspection]))
 
-(def ^:private uuid-translator
-  (translator/translator (fn [s]
-                           (if (string? s)
-                             (or (parse-uuid s) s)
-                             (throw (translator/format-error "Not a uuid string" s))))
-                         (fn [uuid]
-                           (assert (uuid? uuid) uuid)
-                           (str uuid))
-                         realm/string))
+(def uuid-string-formatter
+  (formatter/simple
+   (translator/translator (fn from-extern [s]
+                            (let [r (when (string? s)
+                                      (parse-uuid s))]
+                              (if (nil? r)
+                                (throw (translator/format-error "Not a uuid string" s))
+                                r)))
+                          (fn to-extern [uuid]
+                            (assert (uuid? uuid) uuid)
+                            (str uuid))
+                          realms/uuid-string)))
 
-(defn- integer-translator [realm]
-  #?(:cljs (translator/translator (fn [s]
-                                    (let [r (js/parseInt s 10)]
-                                      (if (js/isNaN r)
-                                        (throw (translator/format-error "Not an integer" s))
-                                        (do
-                                          (when-not (realm/contains? realm r)
-                                            (throw (translator/format-error "Integer out of range" r)))
-                                          r))))
+(defn- check-range [from to v]
+  (when-not (and (or (nil? from)
+                     (<= from v))
+                 (or (nil? to)
+                     (<= v to)))
+    (throw (translator/format-error (str  (cond
+                                            (nil? from) (str "Larger than" to)
+                                            (nil? to) (str "Smaller than" from)
+                                            :else
+                                            (str "Not in range " "[" from ", " to "]"))) v))))
+
+(defn- integer-string-formatter [from to]
+  (formatter/simple
+   #?(:cljs (translator/translator (fn [s]
+                                     (let [r (js/parseInt s 10)]
+                                       (if (js/isNaN r)
+                                         (throw (translator/format-error "Not an integer" s))
+                                         (do
+                                           (check-range from to r)
+                                           r))))
+                                   (fn [i]
+                                     (.toString i))
+                                   realm/string)
+      :clj (translator/translator (fn [s]
+                                    (let [r (try (Integer/parseInt s)
+                                                 (catch NumberFormatException _e
+                                                   (throw (translator/format-error "Not an integer" s))))]
+                                      (check-range from to r)
+                                      r))
                                   (fn [i]
-                                    (.toString i))
-                                  realm/string)
-     :clj (translator/translator (fn [s]
-                                   (let [r (try (Integer/parseInt s)
-                                                (catch NumberFormatException _e
-                                                  (throw (translator/format-error "Not an integer" s))))]
-                                     (when-not (realm/contains? realm r)
-                                       (throw (translator/format-error "Integer out of range" r)))
-                                     r))
-                                 (fn [i]
-                                   (Integer/toString i))
-                                 realm/string)))
+                                    (Integer/toString i))
+                                  ;; Note: losing range info here; but that would be hard as a pattern.
+                                  ;; TODO realms/pattern-string "[-]?[0-9]+" or so?
+                                  realm/string))))
 
-(def ^:private string-translator
-  (translator/translator (fn [s]
-                           (if (string? s)
-                             s
-                             (throw (translator/format-error "Not a string" s))))
-                         identity
-                         realm/string))
-
-(defn- optional-formatter [realm]
-  (fn [resolve]
-    (let [t (resolve realm)]
-      (translator/translator (fn [v]
-                               (if (some? v)
-                                 ((translator/from-extern t) v)
-                                 nil))
-                             (fn [v]
-                               (if (some? v)
-                                 ((translator/to-extern t) v)
-                                 nil))
-                             (realm/optional realm/string)))))
-
-(defn- checked-enum [constants]
-  (translator/translator (fn [v]
-                           (if (contains? constants v)
-                             v
-                             (throw (translator/format-error (str "Not in set " (pr-str constants)) v))))
-                         identity
-                         (apply realm/enum constants)))
+(defn- stringable? [v]
+  (or (string? v)
+      (int? v)))
 
 (def ^{:doc "Defines a default format for string coercions, used for path and query parameters.
   Only supports realms that have an 'obvious' string representation, and `nil` for optionals."}
   default-string-format
   (fn [realm]
     (cond
-      (realm-inspection/string? realm) (formatter/simple string-translator)
+      (or (realm-inspection/string? realm)
+          (realm-inspection/optional? realm)
+          ;; intersection and union are ok, if the base realms are supported
+          (realm-inspection/intersection? realm)
+          (realm-inspection/union? realm))
+      (formatter/identity realm)
 
-      (realm-inspection/uuid? realm) (formatter/simple uuid-translator)
+      (realm-inspection/uuid? realm) uuid-string-formatter
 
-      (realm-inspection/optional? realm)
-      (optional-formatter (realm-inspection/optional-realm-realm realm))
-
-      (realm-inspection/integer-from-to? realm) (formatter/simple (integer-translator realm))
+      (realm-inspection/integer-from-to? realm) (integer-string-formatter (realm-inspection/integer-from-to-realm-from realm)
+                                                                          (realm-inspection/integer-from-to-realm-to realm))
 
       (realm-inspection/enum? realm)
       (let [vals (realm-inspection/enum-realm-values realm)]
-        (if (every? string? vals) ;; TODO: or the other things that have representations? int and uuid?
-          (formatter/simple (checked-enum (realm-inspection/enum-realm-values realm)))
-          nil))
-
-      ;; intersection and union are ok, if the base realms are supported
-      (realm-inspection/intersection? realm) (formatter/identity realm)
-      (realm-inspection/union? realm) (formatter/identity realm)
+        (if (every? string? vals)
+          (formatter/identity realm)
+          (if (every? stringable? vals)
+            (formatter/constants (into {}
+                                       (map (fn [v]
+                                              [v (str v)])
+                                            vals)))
+            nil)))
 
       :else nil)))

@@ -1,4 +1,4 @@
-(defproject de.active-group/active-data-http "0.3.0"
+(defproject de.active-group/active-data-http "0.4.0-SNAPSHOT"
   :license {:name "Eclipse Public License"
             :url "http://www.eclipse.org/legal/epl-v10.html"}
 
@@ -10,7 +10,6 @@
                  [cljs-ajax "0.7.5" :scope "provided"]
                  [metosin/reitit-core "0.7.2" :scope "provided"]
                  [metosin/reitit-ring "0.7.2" :scope "provided"]
-                 [metosin/reitit-spec "0.7.2" :scope "provided"]
                  [de.active-group/reacl-c-basics "0.11.8" :scope "provided"]]
 
   :plugins [[lein-codox "0.10.8"]]
@@ -22,7 +21,7 @@
              {:source-paths ["src" "test"]
               :dependencies [[thheller/shadow-cljs "2.27.1"]]}
              :test
-             {:dependencies []}
+             {:dependencies [[metosin/reitit "0.7.2"]]}
              :dev
              {:dependencies [[clj-kondo "2024.09.27"]]}}
 

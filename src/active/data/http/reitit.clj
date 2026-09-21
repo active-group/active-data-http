@@ -27,10 +27,13 @@
   (update coercion-error1 :problems concat (:problems coercion-error2)))
 
 (defn- compile-model [model _name]
+  ;; TODO: use name for error messages
   ;; Note: model is what the user has given in the spec - may be {:foo realm} for query and path parameters, or any realm for bodies.
   (RealmModel. (if (and (map? model)
                         (not (realm-inspection/realm? model)))
-                 (realm/map-with-keys model)
+                 (realm/map-with-keys (into {} (map (fn [[k v]]
+                                                      [k (realm/compile v)])
+                                                    model)))
                  (realm/compile model))
                false))
 
@@ -80,18 +83,28 @@
     (wrap-coercion-errors (fn []
                             ((translate/from-extern realm format) value)))))
 
-(defn realm-model->external-realm [realm-model format]
+(defn- realm-model->external-realm [realm-model format]
   (assert (instance? RealmModel realm-model))
   (translate/external-realm (:realm realm-model) format))
+
+(defn- realm-model->external-realm-map [realm-model format]
+  (assert (instance? RealmModel realm-model))
+  (let [realm (:realm realm-model)]
+    (if (realm-inspection/map-with-keys? realm)
+      (into {}
+            (map (fn [[k realm]]
+                   [k (translate/external-realm realm format)])
+                 (realm-inspection/map-with-keys-realm-map realm)))
+      (assert false realm) #_(translate/external-realm realm format))))
 
 (defn- realm-model-or-nil? [thing]
   (or (nil? thing) (instance? RealmModel thing)))
 
 (defn realm-coercion
   "Returns a reitit coercion based on realms and the given realm formatter."
-  ;; TODO: more docstring
   ;; Note: coercion comes after parsing (json, transit, something else)
-  [body-format & {string-format :strings}]
+  [body-format & {string-format :strings}] ;; TODO maybe we need a separate format for every content-type
+
   ;; see https://github.com/metosin/reitit/blob/ff99ab3ff929ca1b5fd7446d72d1a6eb07668795/modules/reitit-core/src/reitit/coercion.cljc#L39
   ;; for type/open/keywordize
   (let [string-format (or string-format common/default-string-format)
@@ -100,13 +113,16 @@
       (-get-name [_this] coercion-name)
       (-get-options [_this] nil)
       (-get-apidocs [_this specification {:keys [parameters responses]}]
-        (assert (every? realm-model-or-nil? (select-keys parameters [:body :query :header])))
+        (assert (realm-model-or-nil? (:body parameters)))
+        (assert (realm-model-or-nil? (:query parameters)))
+        (assert (realm-model-or-nil? (:header parameters)))
         (assert (every? realm-model-or-nil? (map :body (vals responses))))
+
         (case specification
           :swagger
           (let [body-realm (some-> parameters :body (realm-model->external-realm body-format))
-                query-realm (some-> parameters :query (realm-model->external-realm string-format))
-                header-realm (some-> parameters :header (realm-model->external-realm string-format))
+                query-realm (some-> parameters :query (realm-model->external-realm-map string-format))
+                header-realm (some-> parameters :header (realm-model->external-realm-map string-format))
                 responses-realm (->> responses
                                      (map (fn [[status response]]
                                             [status (update response :body #(realm-model->external-realm % body-format))]))
@@ -122,14 +138,18 @@
       (-get-model-apidocs [_this specification model options]
         (assert (instance? RealmModel model))
         (case specification
-          :openapi (if (= :parameter (:type options))  ; TODO: What are the `:type`s? Should maybe be a `(case (:type options) ...)`.
-                     (let [realm (realm-model->external-realm model
-                                                              string-format)]
-                       (when-not (realm-inspection/map-with-keys? realm)
-                         (println "WARNING: Unsupported realm for OpenAPI (expected map-with-keys realm)" (select-keys options [:in :parameter]) realm))
-                       (json-schema/json-schema-from-realm realm))
-                     (json-schema/json-schema-from-realm (realm-model->external-realm model
-                                                                                      body-format)))
+          :openapi
+          (case (:type options)
+            :parameter
+            (case (:in options)
+              (:path :query :header)
+              (let [rmap (realm-model->external-realm-map model string-format)]
+                (json-schema/json-schema-from-realm (realm/map-with-keys rmap))))
+
+            :schema
+            ;; (:in options) is :requestBody or :responses here
+            (json-schema/json-schema-from-realm (realm-model->external-realm model body-format)))
+
           (throw
            (ex-info
             (str "Can't produce Realm apidocs for " specification)
@@ -137,7 +157,7 @@
 
       (-compile-model [_this model name]
         ;; model will be a sequence of realms here, or maps for query/path params
-        (assert (= 1 (count model)) "TODO: what do multiple models mean?")
+        (assert (= 1 (count model)) "What do multiple models mean?")
         (->> model
              (map (fn [model]
                     (compile-model model name)))

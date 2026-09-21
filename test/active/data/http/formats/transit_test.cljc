@@ -1,9 +1,16 @@
 (ns active.data.http.formats.transit-test
   (:require [active.data.http.formats.transit :as sut]
+            [active.data.http.realms :as realms]
             [active.data.translate.core :as translate]
             [active.data.realm :as realm]
             [active.data.record :as r #?@(:cljs [:include-macros true])]
             [clojure.test :as t #?@(:cljs [:include-macros true])]))
+
+(t/deftest transit-realm?-test
+  (t/is (realms/transit-realm? realm/string))
+  (t/is (realms/transit-realm? (realm/set-of realm/string)))
+  (t/is (realms/transit-realm? (-> realm/string
+                                   (realm/restricted #(= (count %) 5) "length 5")))))
 
 ;; TODO: clojurescript. and interop between clj and cljs (via transit values)
 

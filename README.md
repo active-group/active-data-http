@@ -24,7 +24,7 @@ there is a "batteries included" transit format that can translate
 between most of your data and a transit compatible form automatically:
 
 ```
-active.data.http.formats.transit/transit-format
+active.data.http.formats.transit/extended
 ```
 
 Use this only if the coupling introduced by that is not an issue, or
@@ -44,7 +44,7 @@ realms that are defined in your code and thus are subject to potential
 change over time. You can use
 
 ```
-active.data.http.formats.transit/basic-formatters
+active.data.http.formats.transit/basic
 ```
 
 as a base for that, which includes formatters for things that are

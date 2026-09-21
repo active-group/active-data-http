@@ -3,68 +3,39 @@
             [active.data.translate.formatter :as formatter]
             [active.data.translate.translator :as translator]
             [active.data.realm.inspection :as realm-inspection]
+            [active.data.http.formats.json :as json]
             #?(:cljs [cognitect.transit :as transit])
-            [active.data.realm :as realm]))
+            [active.data.realm :as realm]
+            [active.data.http.realms :as realms]))
 
-#_(def ^:private transit?
-  ;; Note: this can be an expensive call; don't use it too much.
-    #?(:cljs (some-fn nil?
-                      keyword?
-                      string? ;; = char
-                      boolean?
-                      symbol?
-                      #(instance? js/Date %)
-                      transit/bigdec? ;; = decimal?
-                      transit/bigint?
-                      transit/binary?
-                      transit/integer?
-                      transit/link?
-                      transit/quoted?
-                    ;; transit/tagged-value?
-                      transit/uri?
-                      transit/uuid?
+;; Note: this is almost like transit-realm without the restrictions
+(def ^:private transit-realm-plain (realms/transit-realm-of (var realm/any) (var realms/transit?)))
 
-                    ;; TODO array, list, set, map, cmap?
-                      )
-       :clj (some-fn nil?
-                     keyword?
-                     string?
-                     boolean?
-                     integer? ;; is that correct?
-                     decimal? ;; is that correct?
-                     symbol?
-                   ;; TODO bigdec, bigint
-                     #(instance? java.util.Date %)
-                     uri?
-                     uuid?
-                     char?
-                   ;; TODO array, list, set, map, link
-                     )))
-
-#_(def transit-realm (realm/from-predicate transit?))
-
-(def ^:private exceptions
-  (fn [realm]
-    (cond
-      ;; Note: realm uuid is: clojure.core/uuid? (java.util.UUID) resp. cljs.core/uuid? (cljs.core/UUID)
-      ;; transit uuid is: java.util.UUID  resp. com.cognitect.transit in cljs
-      (realm-inspection/uuid? realm)
-      #?(:clj (formatter/identity realm)
-
-         :cljs (formatter/simple
-                (translator/translator (fn from-extern [v]
-                                         ;; v should satisfy (transit/uuid? v)
-                                         (uuid (str v)))
-                                       (fn to-extern [v]
-                                         (transit/uuid (str v)))
-                                       (realm/from-predicate "Transit uuid" transit/uuid?))))
-
-      :else nil)))
-
-(def ^{:doc "A format supporting values that are directly compatible with transit."} basic
+(def ^{:doc "A format supporting values that are directly compatible with transit+json."} basic
   (format/combine-formats
-   exceptions
-   format/identity))
+   (fn [realm]
+     (cond
+       (realm-inspection/uuid? realm)
+       ;; Note: realm uuid is: clojure.core/uuid? (java.util.UUID) resp. cljs.core/uuid? (cljs.core/UUID)
+       ;; transit uuid is: java.util.UUID  resp. com.cognitect.transit in cljs
+       #?(:clj (formatter/identity realm)
+
+          :cljs (formatter/simple
+                 (translator/translator (fn from-extern [v]
+                                          (when-not (transit/uuid? v)
+                                            (throw (translator/format-error "Not a transit uuid" v)))
+                                          (uuid (str v)))
+                                        (fn to-extern [v]
+                                          (transit/uuid (str v)))
+                                        realms/transit-uuid)))
+
+       :else nil))
+   json/basic
+   (fn [realm]
+     ;; Note: transit-realm? would be too restrictive here.
+     (if (realm/contains? transit-realm-plain realm)
+       (formatter/identity realm)
+       nil))))
 
 (declare record-as-tuple)
 
