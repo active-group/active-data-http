@@ -24,6 +24,10 @@
   (translate-to realm sut/extended
                 (translate-from realm sut/extended v)))
 
+(defn iroundtrip [realm v]
+  (translate-from realm sut/extended
+                  (translate-to realm sut/extended v)))
+
 (t/deftest empty-map-test
   (let [realm (realm/map-of realm/integer realm/integer)
         v {}
@@ -87,3 +91,19 @@
              (roundtrip (realm/enum :foo "bar") :foo)))
     (t/is (= (rec-ab rec-a "foo" rec-b 42)
              (roundtrip rec-ab (rec-ab rec-a "foo" rec-b 42))))))
+
+(t/deftest iso-date-and-time-test
+  #?@(:clj
+      [(t/is (= "2026-01-01" (iroundtrip realms/local-date "2026-01-01")))
+       (t/is (= "2026-12-31" (iroundtrip realms/local-date "2026-12-31")))])
+
+  #?@(:clj
+      [(t/is (= "2007-12-03T10:15:30Z" (iroundtrip realms/offset-date-time "2007-12-03T10:15:30Z")))
+       (t/is (= "2007-12-03T10:15:30+01:00" (iroundtrip realms/offset-date-time "2007-12-03T10:15:30+01:00")))])
+
+  #?@(:clj
+      [(t/is (= "2007-12-03T10:15:30" (iroundtrip realms/local-date-time "2007-12-03T10:15:30")))
+       (t/is (= "10:15:30" (iroundtrip realms/local-time "10:15:30")))])
+
+  ;; Note: Java will drop the second-fraction if it is 0.
+  (t/is (= "2007-12-03T10:15:30.001Z" (iroundtrip realms/instant "2007-12-03T10:15:30.001Z"))))

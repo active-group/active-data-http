@@ -31,10 +31,17 @@
     (realms/iso-date-realm? realm)
     {:type "string" :format "date"}
 
-    (realms/iso-time-realm? realm)
+    (or (realms/iso-offset-time-realm? realm)
+        (realms/iso-time-realm? realm))
+    ;; There are differences: offset-time is with offset, time is without offset.
+    ;; But not sure json-schema can represent them.
     {:type "string" :format "time"}
 
-    (realms/iso-date-time-realm? realm)
+    (or (realms/iso-offset-date-time-realm? realm)
+        (realms/iso-date-time-realm? realm)
+        (realms/iso-instant-realm? realm))
+    ;; There are differences: offset-date-time is with offset, date-time is without offset, and instant is with Z offset only.
+    ;; But not sure json-schema can represent them.
     {:type "string" :format "date-time"}
 
     (inspection/string? realm)

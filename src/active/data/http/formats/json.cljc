@@ -13,13 +13,15 @@
 (def basic
   (format/combine-formats
    ;; some things have an 'obvious' coercion:
+   common/date-and-time-iso-string-formats
    (fn [realm]
      (cond
-       ;; uuid as string
+       ;; uuid as a string
        (realm-inspection/uuid? realm) common/uuid-string-formatter
 
-       ;; any sequence into a vector
-       (realm-inspection/sequence-of? realm)
+       ;; any (other) sequence as a vector
+       (and (realm-inspection/sequence-of? realm)
+            (not (realms/vector-of-realm? realm)))
        (fn [resolve]
          (let [it (resolve (realm-inspection/sequence-of-realm-realm realm))]
            (translator/translator (fn from-extern [v]

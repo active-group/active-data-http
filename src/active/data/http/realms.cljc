@@ -2,10 +2,11 @@
   "Realms that can be useful in web programming. Some of these also take
    special roles in the rest of this library."
   (:require
-   [active.data.realm :as realm]
+   [active.data.realm :as realm #?@(:cljs [:include-macros true])]
    [active.data.realm.inspection :as realm-inspection]
    #?(:cljs [cognitect.transit :as transit]))
-  (:refer-clojure :exclude [vector-of]))
+  (:refer-clojure :exclude [vector-of time])
+  #?(:clj (:import (java.time LocalDate OffsetDateTime OffsetTime Instant LocalTime LocalDateTime))))
 
 ;; TODO: These might be useful, too:  ipv4, ipv6, uri, email
 ;; TODO? string with pattern; and more formats (https://json-schema.org/understanding-json-schema/reference/type#built-in-formats)
@@ -18,7 +19,8 @@
                  (realm-inspection/from-predicate? b))
         (realm-inspection/predicate b)))))
 
-(defn- restricted-realm? [base? predicate v]
+(defn- restricted-realm?
+  [base? predicate v]
   (= (restricted-realm-pred base? v)
      predicate))
 
@@ -45,7 +47,7 @@
     (when (instance? LengthRestriction p)
       [(:min p) (:max p)])))
 
-(defn- uuid-string? [s]
+(defn uuid-string? [s]
   (and (string? s)
        (some? (parse-uuid s))))
 
@@ -56,38 +58,145 @@
 (defn uuid-string-realm? [realm]
   (restricted-realm? realm-inspection/string? uuid-string? realm))
 
-;; dates and times: https://datatracker.ietf.org/doc/html/rfc3339#section-5.6
+;; date and time
+
+#?(:clj
+   ;; No cljs support for now, as js/Date is so messed up with respect to timezones.
+   [(defn- local-date? [v]
+      (instance? LocalDate v))
+
+    (def local-date (realm/from-predicate "local date"
+                                          local-date?))
+
+    (defn local-date-realm? [r]
+      (and (realm-inspection/from-predicate? r)
+           (= local-date? (realm-inspection/predicate r))))
+
+    ;; could add local-date-time and local-time?
+
+    (defn- local-time? [v]
+      (instance? LocalTime v))
+
+    (def local-time (realm/from-predicate "local time"
+                                          local-time?))
+
+    (defn local-time-realm? [r]
+      (and (realm-inspection/from-predicate? r)
+           (= local-time? (realm-inspection/predicate r))))
+
+    (defn- local-date-time? [v]
+      (instance? LocalDateTime v))
+
+    (def local-date-time (realm/from-predicate "local date and time"
+                                               local-date-time?))
+
+    (defn local-date-time-realm? [r]
+      (and (realm-inspection/from-predicate? r)
+           (= local-date-time? (realm-inspection/predicate r))))
+
+    (defn- offset-date-time? [v]
+      (instance? OffsetDateTime v))
+
+    (def offset-date-time (realm/from-predicate "offset date and time"
+                                                offset-date-time?))
+
+    (defn offset-date-time-realm? [r]
+      (and (realm-inspection/from-predicate? r)
+           (= offset-date-time? (realm-inspection/predicate r))))
+
+    (defn- offset-time? [v]
+      (instance? OffsetTime v))
+
+    (def offset-time (realm/from-predicate "offset time"
+                                           offset-time?))
+
+    (defn offset-time-realm? [r]
+      (and (realm-inspection/from-predicate? r)
+           (= offset-time? (realm-inspection/predicate r))))])
+
+(defn- instant? [v]
+  ;; Note: js/Date does not store timezone information, so it's most like Instant.
+  #?(:clj (instance? Instant v)
+     :cljs (instance? js/Date v)))
+
+(def instant (realm/from-predicate "instant in time"
+                                   instant?))
+
+(defn instant-realm? [r]
+  (and (realm-inspection/from-predicate? r)
+       (= instant? (realm-inspection/predicate r))))
+
+;; date and time strings: https://datatracker.ietf.org/doc/html/rfc3339#section-5.6
+
+(defn iso-instant? [s]
+  ;; like offset date time, but only Zulu time allowed
+  (boolean (and (string? s)
+                (re-matches #"^(\d{4}-[01]\d-[0-3]\dT[0-2]\d:[0-5]\d:[0-5]\d\.\d+Z)|(\d{4}-[01]\d-[0-3]\dT[0-2]\d:[0-5]\d:[0-5]\dZ)|(\d{4}-[01]\d-[0-3]\dT[0-2]\d:[0-5]\dZ)$"
+                            s))))
 
 (defn iso-date? [s]
-  (and (string? s)
-       (re-matches #"^(\d{4}-[01]\d-[0-3]\d)$" s)))
+  (boolean (and (string? s)
+                (re-matches #"^(\d{4}-[01]\d-[0-3]\d)$" s))))
+
+(defn iso-offset-time? [s]
+  (boolean (and (string? s)
+                (re-matches #"^([0-2]\d:[0-5]\d:[0-5]\d([+-][0-2]\d:[0-6]\d|Z))|([0-2]\d:[0-5]\d([+-][0-2]\d:[0-6]\d|Z))$" s))))
+
+(defn iso-offset-date-time? [s]
+  (boolean (and (string? s)
+                (re-matches #"^(\d{4}-[01]\d-[0-3]\dT[0-2]\d:[0-5]\d:[0-5]\d\.\d+([+-][0-2]\d:[0-6]\d|Z))|(\d{4}-[01]\d-[0-3]\dT[0-2]\d:[0-5]\d:[0-5]\d([+-][0-2]\d:[0-5]\d|Z))|(\d{4}-[01]\d-[0-3]\dT[0-2]\d:[0-5]\d([+-][0-2]\d:[0-6]\d|Z))$"
+                            s))))
 
 (defn iso-time? [s]
-  (and (string? s)
-       (re-matches #"^([0-2]\d:[0-5]\d:[0-5]\d([+-][0-2]\d:[0-6]\d|Z))|([0-2]\d:[0-5]\d([+-][0-2]\d:[0-6]\d|Z))$" s)))
+  ;; without timezone!
+  (boolean (and (string? s)
+                (re-matches #"^[0-2]\d:[0-5]\d:[0-5]\d$" s))))
 
 (defn iso-date-time? [s]
-  (and (string? s)
-       (re-matches #"^(\d{4}-[01]\d-[0-3]\dT[0-2]\d:[0-5]\d:[0-5]\d\.\d+([+-][0-2]\d:[0-6]\d|Z))|(\d{4}-[01]\d-[0-3]\dT[0-2]\d:[0-5]\d:[0-5]\d([+-][0-2]\d:[0-5]\d|Z))|(\d{4}-[01]\d-[0-3]\dT[0-2]\d:[0-5]\d([+-][0-2]\d:[0-6]\d|Z))$"
-                   s)))
+  ;; without timezone!
+  (boolean (and (string? s)
+                (re-matches #"^(\d{4}-[01]\d-[0-3]\dT[0-2]\d:[0-5]\d:[0-5]\d\.\d+)|(\d{4}-[01]\d-[0-3]\dT[0-2]\d:[0-5]\d:[0-5]\d)|(\d{4}-[01]\d-[0-3]\dT[0-2]\d:[0-5]\d)$"
+                            s))))
+
+(def ^{:doc "Realm of strings representing an ISO instant in time"} iso-instant
+  (realm/restricted realm/string iso-instant? "ISO instant"))
+
+(defn iso-instant-realm? [realm]
+  (restricted-realm? realm-inspection/string? iso-instant? realm))
 
 (def ^{:doc "Realm of strings representing an ISO date"} iso-date
+  ;; a (local) date, without timezone
   (realm/restricted realm/string iso-date? "ISO date"))
 
 (defn iso-date-realm? [realm]
   (restricted-realm? realm-inspection/string? iso-date? realm))
 
-(def ^{:doc "Realm of strings representing an ISO time"} iso-time
+(def ^{:doc "Realm of strings representing an ISO time with timezone offset"} iso-offset-time
+  (realm/restricted realm/string iso-offset-time? "ISO offset time"))
+
+(defn iso-offset-time-realm? [realm]
+  (restricted-realm? realm-inspection/string? iso-offset-time? realm))
+
+(def ^{:doc "Realm of strings representing an ISO date and time with timezone offset"} iso-offset-date-time
+  ;; a date and time with timezone
+  (realm/restricted realm/string iso-offset-date-time? "ISO offset date-time"))
+
+(defn iso-offset-date-time-realm? [realm]
+  (restricted-realm? realm-inspection/string? iso-offset-date-time? realm))
+
+(def ^{:doc "Realm of strings representing an ISO time without timezone offset"} iso-time
   (realm/restricted realm/string iso-time? "ISO time"))
 
 (defn iso-time-realm? [realm]
   (restricted-realm? realm-inspection/string? iso-time? realm))
 
-(def ^{:doc "Realm of strings representing an ISO date and time"} iso-date-time
+(def ^{:doc "Realm of strings representing an ISO date and time without timezone offset"} iso-date-time
   (realm/restricted realm/string iso-date-time? "ISO date-time"))
 
 (defn iso-date-time-realm? [realm]
   (restricted-realm? realm-inspection/string? iso-date-time? realm))
+
+;;
 
 (defn list-of "Realm of lists with items of the given realm." [item-realm]
   (realm/restricted (realm/sequence-of item-realm)
@@ -273,6 +382,4 @@
   (transit-realm-of (var transit-realm) (var transit?)))
 
 (defn transit-realm? [realm]
-  ;; to be used in reitit, to check that the extern-realm of a format given for application/transit+json
-  ;; also, transit-realm defines the value which 'json/transit-schema' should support
   (realm/contains? transit-realm realm))
