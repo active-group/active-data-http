@@ -167,10 +167,6 @@
                                       (Integer/toString i))
                                     ext)))))
 
-(defn- stringable? [v]
-  (or (string? v)
-      (int? v)))
-
 (def ^{:doc "Defines a default format for string coercions, used for path and query parameters.
   Only supports realms that have an 'obvious' string representation, and `nil` for optionals."}
   default-string-format
@@ -194,11 +190,8 @@
        (let [vals (realm-inspection/enum-realm-values realm)]
          (if (every? string? vals)
            (formatter/identity realm)
-           (if (every? stringable? vals)
-             (formatter/constants (into {}
-                                        (map (fn [v]
-                                               [v (str v)])
-                                             vals)))
-             nil)))
+           ;; Note: we could try to support more here, like ints with a mapping to (str int), but that might go to far already;
+           ;; as we "risk" having to guess what it is, like with an (enum 3 "3"). It should probably better be left to an explicit mapping.
+           nil))
 
        :else nil))))
