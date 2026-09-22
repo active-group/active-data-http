@@ -44,19 +44,19 @@
         :body (str "URI: " (:uri req))})))
 
 (t/deftest valid-request
-  (t/is (= {:status 200, :body {:total 11}}
-           (app {:request-method :post
-                 :uri "/api/plus/3"
-                 :query-params {"foo" "5"}
-                 :body-params {:x 1 :y 2}})))
+  (t/is (= {:total 11}
+           (:body (app {:request-method :post
+                        :uri "/api/plus/3"
+                        :query-params {"foo" "5"}
+                        :body-params {:x 1 :y 2}}))))
 
   (t/testing "extra query param is ok"
     ;; see open-model; this is what reitit expects per default, I think.
-    (t/is (= {:status 200 :body {:total 11}}
-             (app {:request-method :post
-                   :uri "/api/plus/3"
-                   :query-params {"foo" "5" "baz" "1"}
-                   :body-params {:x 1 :y 2}})))))
+    (t/is (= {:total 11}
+             (:body (app {:request-method :post
+                          :uri "/api/plus/3"
+                          :query-params {"foo" "5" "baz" "1"}
+                          :body-params {:x 1 :y 2}}))))))
 
 (t/deftest invalid-request
   (t/testing "invalid body param, no :x nor :y"
@@ -67,7 +67,6 @@
                             :query-params {"foo" "5"}
                             :body-params {:bla 2}})))))
 
-  ;; should work if string-format wouldn't just return the original if integer parsing fails.
   (t/testing "missing query param, :foo is not set"
     ;; TODO: Test the message? (not bad, but could be better)
     (t/is (= 400
@@ -75,7 +74,6 @@
                             :uri "/api/plus/3"
                             :body-params {:x 1 :y 2}})))))
 
-  ;; should work if string-format wouldn't just return the original if integer parsing fails.
   (t/testing "invalid path param; bla is not an integer"
     ;; TODO: Test the message? (not bad, but could be better)
     (t/is (= 400

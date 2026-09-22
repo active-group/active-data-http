@@ -51,44 +51,50 @@
              {}
              realm-map))
 
-(defn- convert-map [format model value _format]
-  ;; Note: _format can be 'application/transit+json' for example; not needed here.
+(defn- convert-map [format model]
   (let [realm (:realm model)
         open? (:open? model)]
     (assert (realm-inspection/map-with-keys? realm))
-    (let [realm-map (realm-inspection/map-with-keys-realm-map realm)]
+    (fn [value _mime-format]
+      (let [realm-map (realm-inspection/map-with-keys-realm-map realm)]
       ;; Note: we convert value-by-value, because the maps are implicit for path-params etc. The format cannot and should not decide how it looks like.
       ;; Also, 'value' can easily be nil for form params and others; should be equivalent to an empty map here.
-      (if open?
+        (if open?
         ;; means that the value should be allowed to contain more keys than given. (afaik)
-        (do
-          (assert (realm-inspection/map-with-keys? realm) "Only map models can be open models.")
-          (let [known-keys (keys realm-map)
-                known (select-keys value known-keys)
-                unconverted (if (empty? known-keys)
-                              value
-                              (apply dissoc value known-keys))
-                converted (convert-closed-map format realm-map known)]
-            (if (coercion/error? converted)
-              converted
-              (merge unconverted converted))))
-        (convert-closed-map format realm-map value)))))
+          (do
+            (assert (realm-inspection/map-with-keys? realm) "Only map models can be open models.")
+            (let [known-keys (keys realm-map)
+                  known (select-keys value known-keys)
+                  unconverted (if (empty? known-keys)
+                                value
+                                (apply dissoc value known-keys))
+                  converted (convert-closed-map format realm-map known)]
+              (if (coercion/error? converted)
+                converted
+                (merge unconverted converted))))
+          (convert-closed-map format realm-map value))))))
 
-(defn- convert [format model value _format]
-  ;; Note: _format can be 'application/transit+json' for example; not needed here.
+(defn- convert [format model]
   (assert (instance? RealmModel model) model)
-  (let [realm (:realm model)
-        open? (:open? model)]
-    (assert (not open?)) ;; TODO: proper error (maybe allow, if realm is realm-with-keys map?)
-    (wrap-coercion-errors (fn []
-                            ((translate/from-extern realm format) value)))))
+  (fn [value _mime-format]
+    (let [realm (:realm model)
+          open? (:open? model)]
+      (assert (not open?)) ;; TODO: proper error (maybe allow, if realm is realm-with-keys map?)
+      (wrap-coercion-errors (fn []
+                              ((translate/from-extern realm format) value))))))
+
+(defn- convert-response [format model]
+  (assert (instance? RealmModel model) model)
+  (let [from (translate/to-extern (:realm model) format)]
+    (fn [value _mime-format]
+      (wrap-coercion-errors #(from value)))))
 
 (defn- realm-model->external-realm [realm-model format]
-  (assert (instance? RealmModel realm-model))
+  (assert (instance? RealmModel realm-model) realm-model)
   (translate/external-realm (:realm realm-model) format))
 
 (defn- realm-model->external-realm-map [realm-model format]
-  (assert (instance? RealmModel realm-model))
+  (assert (instance? RealmModel realm-model) realm-model)
   (let [realm (:realm realm-model)]
     (if (realm-inspection/map-with-keys? realm)
       (into {}
@@ -125,6 +131,8 @@
                 header-realm (some-> parameters :header (realm-model->external-realm-map string-format))
                 responses-realm (->> responses
                                      (map (fn [[status response]]
+                                            ;; TODO: there is also a variant with :content and mime-types
+                                            (assert (contains? response :body) response)
                                             [status (update response :body #(realm-model->external-realm % body-format))]))
                                      (into {}))]
             (swagger/swagger-spec body-realm
@@ -173,12 +181,8 @@
         ;; model is the result of compile-model
         ;; type should be :body or :string
         (case type
-          :body (partial convert body-format model)
-          :string (partial convert-map string-format model)))
+          :body (convert body-format model)
+          :string (convert-map string-format model)))
       (-response-coercer [_this model]
         ;; model is the result of compile-model here
-        (assert (instance? RealmModel model))
-        (let [from (translate/to-extern (:realm model) body-format)]
-          (fn [value _format]
-            ;; Note: format can be 'application/transit+json' for example; not needed here.
-            (wrap-coercion-errors #(from value))))))))
+        (convert-response body-format model)))))
