@@ -176,9 +176,9 @@
      (cond
        (or (realm-inspection/string? realm)
            (realm-inspection/optional? realm)
-           ;; intersection and union are ok, if the base realms are supported
-           (realm-inspection/intersection? realm)
-           (realm-inspection/union? realm))
+           ;; intersections are ok I think; if all inner realms have a formatter;
+           ;; unions are not in general (everything is a string; we would have to guess/test what it is).
+           (realm-inspection/intersection? realm))
        (formatter/identity realm)
 
        (realm-inspection/uuid? realm) uuid-string-formatter
