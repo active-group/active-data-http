@@ -58,6 +58,25 @@
 (defn uuid-string-realm? [realm]
   (restricted-realm? realm-inspection/string? uuid-string? realm))
 
+(defrecord ^:private PatternRestriction [pattern]
+  #?@(:clj [clojure.lang.IFn
+            (invoke [_this v] (and (string? v)
+                                   (re-matches pattern v)))]
+      :cljs [IFn
+             (-invoke [_this v] (and (string? v)
+                                     (re-matches pattern v)))]))
+
+(defn string-pattern "Realm of strings matching the given pattern." [regex]
+  (realm/restricted realm/string
+                    ;; using an IFn to make it reflectible
+                    (PatternRestriction. regex)
+                    "pattern"))
+
+(defn string-pattern-realm? "Returns the pattern if it is a [[string-pattern]] realm." [r]
+  (when-let [p (restricted-realm-pred realm-inspection/string? r)]
+    (when (instance? PatternRestriction p)
+      (:pattern p))))
+
 ;; date and time
 
 #?(:clj

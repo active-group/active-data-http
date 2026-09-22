@@ -2,7 +2,7 @@
   (:require [active.data.translate.formatter :as formatter]
             [active.data.translate.translator :as translator]
             [active.data.http.realms :as realms]
-            [active.data.realm :as realm #?@(:cljs [:include-macros true])]
+            ;; [active.data.realm :as realm #?@(:cljs [:include-macros true])]
             [active.data.realm.inspection :as realm-inspection]
             [active.data.translate.format :as format])
   #?(:clj (:import (java.time LocalDate OffsetDateTime OffsetTime Instant LocalTime LocalDateTime)
@@ -101,7 +101,6 @@
                                         (.toString v))
                                :cljs (do (assert (instance? js/Date v) v)
                                          (.toISOString v))))
-                          ;; could use a more specific 'iso-utc-date-time' here.
                           realms/iso-instant)))
 
 (def date-and-time-iso-string-formats
@@ -144,28 +143,29 @@
                                             (str "Not in range " "[" from ", " to "]"))) v))))
 
 (defn- integer-string-formatter [from to]
-  (formatter/simple
-   #?(:cljs (translator/translator (fn [s]
-                                     (let [r (js/parseInt s 10)]
-                                       (if (js/isNaN r)
-                                         (throw (translator/format-error "Not an integer" s))
-                                         (do
-                                           (check-range from to r)
-                                           r))))
-                                   (fn [i]
-                                     (.toString i))
-                                   realm/string)
-      :clj (translator/translator (fn [s]
-                                    (let [r (try (Integer/parseInt s)
-                                                 (catch NumberFormatException _e
-                                                   (throw (translator/format-error "Not an integer" s))))]
-                                      (check-range from to r)
-                                      r))
-                                  (fn [i]
-                                    (Integer/toString i))
-                                  ;; Note: losing range info here; but that would be hard as a pattern.
-                                  ;; TODO realms/pattern-string "[-]?[0-9]+" or so?
-                                  realm/string))))
+  (let [ext
+        ;; Note: losing range info here; but that would be hard as a pattern.
+        (realms/string-pattern #"[-]?[0-9]+")]
+    (formatter/simple
+     #?(:cljs (translator/translator (fn [s]
+                                       (let [r (js/parseInt s 10)]
+                                         (if (js/isNaN r)
+                                           (throw (translator/format-error "Not an integer" s))
+                                           (do
+                                             (check-range from to r)
+                                             r))))
+                                     (fn [i]
+                                       (.toString i))
+                                     ext)
+        :clj (translator/translator (fn [s]
+                                      (let [r (try (Integer/parseInt s)
+                                                   (catch NumberFormatException _e
+                                                     (throw (translator/format-error "Not an integer" s))))]
+                                        (check-range from to r)
+                                        r))
+                                    (fn [i]
+                                      (Integer/toString i))
+                                    ext)))))
 
 (defn- stringable? [v]
   (or (string? v)

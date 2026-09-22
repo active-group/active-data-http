@@ -44,6 +44,11 @@
     ;; But not sure json-schema can represent them.
     {:type "string" :format "date-time"}
 
+    (realms/string-pattern-realm? realm)
+    ;; This (wronly) assumes that the clj/cljs regex patterns are the same as those of json-schema; but what else should we do?
+    ;; It may be true for some easier ones; it's definitely not true for cljs, which even adds '/.../' to it.
+    {:type "string" :pattern (str (realms/string-pattern-realm? realm))}
+
     (inspection/string? realm)
     {:type "string"}
 

@@ -88,9 +88,9 @@
             :body {:openapi "3.1.0", :x-id :some-id,
                    :info {:title "Foo"},
                    :paths {"/api/plus/{bar}"
-                           {:post {:parameters [{:in "path", :name :bar, :required true, :schema {:type "string"}}
-                                                {:in "query", :name :foo, :required true, :schema {:type "string"}}
-                                                {:in "header", :name "my-header", :required false, :schema {:type "string"}}],
+                           {:post {:parameters [{:in "path", :name :bar, :required true, :schema {:type "string" :pattern "[-]?[0-9]+"}}
+                                                {:in "query", :name :foo, :required true, :schema {:type "string" :pattern "[-]?[0-9]+"}}
+                                                {:in "header", :name "my-header", :required false, :schema {:type "string" :pattern "[-]?[0-9]+"}}],
                                    :requestBody {:content {"application/json" {:schema {:type "object",
                                                                                         :properties {:x {:type "integer"}, :y {:type "integer"}},
                                                                                         :required [:x :y],
@@ -107,13 +107,14 @@
   (t/is (= {:status 200,
             :body {:swagger "2.0",
                    :x-id :some-id
+                   ;; Note: swagger really has no schema for path parameters? I doubt it a bit.
                    :paths {"/api/plus/{bar}"
                            {:post {:parameters [{:in :body, :name "body", :description "", :required true,
                                                  :schema {:type "object", :properties {:x {:type "integer"},
                                                                                        :y {:type "integer"}},
                                                           :required [:x :y], :closed false}}
-                                                {:in :query, :name :foo, :description "", :required true, :type "string"}
-                                                {:in :header, :name "my-header", :description "", :required false, :type "string"}]
+                                                {:in :query, :name :foo, :description "", :required true, :type "string" :pattern "[-]?[0-9]+"}
+                                                {:in :header, :name "my-header", :description "", :required false, :type "string" :pattern "[-]?[0-9]+"}]
                                    :responses {200
                                                {:schema {:type "object", :properties {:total {:type "integer"}}, :required [:total], :closed false}}}}}},
                    :definitions {}}}
