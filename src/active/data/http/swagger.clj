@@ -45,7 +45,7 @@
   one output swagger-parameter."
   [realm]
   (let [swagger-schema (json-schema/json-schema-from-realm (de-optional realm))]
-    [{:in :body
+    [{:in "body"
       :name "body"
       :description (get-description realm)
       :required (not (realm-inspection/optional? realm))
@@ -56,7 +56,7 @@
   `parameters-realm` of a query or header parameters definition into a sequence
   of swagger-parameters (maps). Each entry in the `parameters-realm` corresponds to
   one swagger-parameter."
-  [in] ;; One of #{:header :query}.
+  [in] ;; One of #{"path" "header" "query"}.
   (fn [parameters-realm-map]
     (->> parameters-realm-map
          (mapv (fn [[k realm]]
@@ -67,11 +67,13 @@
                            :required (not (realm-inspection/optional? realm))}
                           schema)))))))
 
-(def ^:private compile-query "See [[make-compile-description]]." (make-compile-map :query))
-(def ^:private compile-header "See [[make-compile-description]]." (make-compile-map :header))
+(def ^:private compile-query (make-compile-map "query"))
+(def ^:private compile-header (make-compile-map "header"))
+(def ^:private compile-path (make-compile-map "path"))
 
-(defn- compile-parameters [body query header]
+(defn- compile-parameters [body path query header]
   (vec (concat (when body (compile-body body))
+               (when path (compile-path path))
                (when query (compile-query query))
                (when header (compile-header header)))))
 
@@ -83,14 +85,20 @@
 (defn swagger-spec
   "Return a swagger spec map from body, query, header, and responses.
   `body-realm` must be a realm or nil.
+  `path-realms` must be a map of keywords to realms.
   `query-realms` must be a map of keywords to realms.
   `header-realms` must be a map of lower-case strings to realms.
   `response-realms` must be a map of status code integers to a map {:body <realm>}.
   "
-  [body-realm query-realms header-realms response-realms]
+  [body-realm path-realms query-realms header-realms response-realms]
   (assert (or (nil? body-realm)
               (realm-inspection/realm? body-realm))
           body-realm)
+  (assert (or (nil? path-realms)
+              (and (map? path-realms)
+                   (every? keyword? (keys path-realms))
+                   (every? realm-inspection/realm? (vals path-realms))))
+          path-realms)
   (assert (or (nil? query-realms)
               (and (map? query-realms)
                    (every? keyword? (keys query-realms))
@@ -108,6 +116,6 @@
           response-realms)
 
   ;; TODO: maybe use 'named realms' as 'definition points'? Although different realms may have the same name.
-  {:parameters (compile-parameters body-realm query-realms header-realms)
+  {:parameters (compile-parameters body-realm path-realms query-realms header-realms)
    :definitions {}
    :responses (compile-responses response-realms)})

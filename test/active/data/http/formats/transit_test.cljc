@@ -29,6 +29,8 @@
                   (translate-to realm sut/extended v)))
 
 (t/deftest empty-map-test
+  (t/is (realms/transit-realm? (realm/map-with-keys {})))
+
   (let [realm (realm/map-of realm/integer realm/integer)
         v {}
         t {}]

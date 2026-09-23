@@ -109,17 +109,18 @@
 (defn realm-coercion
   "Returns a reitit coercion based on realms and the given realm formatter."
   ;; Note: coercion comes after parsing (json, transit, something else)
-  [body-format & {string-format :strings}] ;; TODO maybe we need a separate format for every content-type
-
+  [body-format & {string-format :strings}]
   ;; see https://github.com/metosin/reitit/blob/ff99ab3ff929ca1b5fd7446d72d1a6eb07668795/modules/reitit-core/src/reitit/coercion.cljc#L39
   ;; for type/open/keywordize
   (let [string-format (or string-format common/default-string-format)
         coercion-name :active.data.http]
+    ;; TODO: multipart parameters?
     (reify coercion/Coercion
       (-get-name [_this] coercion-name)
       (-get-options [_this] nil)
-      (-get-apidocs [_this specification {:keys [parameters responses]}]
+      (-get-apidocs [_this specification {:keys [request parameters responses content-types] :as options}]
         (assert (realm-model-or-nil? (:body parameters)))
+        (assert (realm-model-or-nil? (:path parameters)))
         (assert (realm-model-or-nil? (:query parameters)))
         (assert (realm-model-or-nil? (:header parameters)))
         (assert (every? realm-model-or-nil? (map :body (vals responses))))
@@ -127,41 +128,49 @@
         (case specification
           :swagger
           (let [body-realm (some-> parameters :body (realm-model->external-realm body-format))
-                query-realm (some-> parameters :query (realm-model->external-realm-map string-format))
-                header-realm (some-> parameters :header (realm-model->external-realm-map string-format))
+                path-realms (some-> parameters :path (realm-model->external-realm-map string-format))
+                query-realms (some-> parameters :query (realm-model->external-realm-map string-format))
+                header-realms (some-> parameters :header (realm-model->external-realm-map string-format))
                 responses-realm (->> responses
                                      (map (fn [[status response]]
-                                            ;; TODO: there is also a variant with :content and mime-types
-                                            (assert (contains? response :body) response)
-                                            [status (update response :body #(realm-model->external-realm % body-format))]))
+                                            ;; Note: there is also the variant with :content and mime-types,
+                                            ;; although reitit already prints a warning that swagger does not support it.
+                                            ;; So we'll ignore it here for now.
+                                            (when (contains? response :body)
+                                              [status (update response :body #(realm-model->external-realm % body-format))])))
+                                     (remove nil?)
                                      (into {}))]
             (swagger/swagger-spec body-realm
-                                  query-realm
-                                  header-realm
+                                  path-realms
+                                  query-realms
+                                  header-realms
                                   responses-realm))
           (throw
            (ex-info
             (str "Can't produce Realm apidocs for " specification)
             {:type specification, :coercion coercion-name}))))
       (-get-model-apidocs [_this specification model options]
-        (assert (instance? RealmModel model))
-        (case specification
-          :openapi
-          (case (:type options)
-            :parameter
-            (case (:in options)
-              (:path :query :header)
-              (let [rmap (realm-model->external-realm-map model string-format)]
-                (json-schema/json-schema-from-realm (realm/map-with-keys rmap))))
+        (when model
+          (assert (instance? RealmModel model) model)
+          (case specification
+            :openapi
+            (case (:type options)
+              :parameter
+              (case (:in options)
+                (:path :query :header)
+                (let [rmap (realm-model->external-realm-map model string-format)]
+                  (json-schema/json-schema-from-realm (realm/map-with-keys rmap))))
 
-            :schema
-            ;; (:in options) is :requestBody or :responses here
-            (json-schema/json-schema-from-realm (realm-model->external-realm model body-format)))
+              :schema
+              ;; (:in options) is :requestBody or :responses here; there can also be (:content-type options), defaulting to application/json
 
-          (throw
-           (ex-info
-            (str "Can't produce Realm apidocs for " specification)
-            {:type specification, :coercion coercion-name}))))
+              ;; Note: it seems this gets wrapped in {:content {"application/json" ..}} per default, and muuntaja duplicates the exact same with the other enabled mime-types.
+              (json-schema/json-schema-from-realm (realm-model->external-realm model body-format)))
+
+            (throw
+             (ex-info
+              (str "Can't produce Realm apidocs for " specification)
+              {:type specification, :coercion coercion-name})))))
 
       (-compile-model [_this model name]
         ;; model will be a sequence of realms here, or maps for query/path params

@@ -9,8 +9,7 @@
             [clojure.test :as t]))
 
 (def plus-endpoint
-  {:coercion (sut/realm-coercion ex/my-body-format)
-   :parameters {:body ex/plus-request
+  {:parameters {:body ex/plus-request
                 :path {:bar realm/integer}
                 :query {:foo realm/integer}
                 :header {"my-header" (realm/optional realm/integer)}}
@@ -24,11 +23,19 @@
                 {:status 200
                  :body (ex/plus-response {ex/res-value total})}))})
 
+;; allegedly there is a variant with content-type specific requests and responses; but Reitit never compiles them, it seems.
+;; https://github.com/metosin/reitit/blob/master/doc/ring/coercion.md#per-content-type-coercion
+(def edn-extension
+  {:request {:content {"application/edn" (realm/map-with-keys {:a realm/integer})}}
+   :responses {200 {:content {"application/edn" realm/string}}}
+   :handler (fn [_] {:status 200 :body "foobar"})})
+
 (def app
   (ring/ring-handler
    (ring/router
-    [["/api" ["/plus/:bar" {:name ::plus
-                            :post plus-endpoint}]]
+    [["/api"
+      ["/plus/:bar" {:name ::plus
+                     :post plus-endpoint}]]
      ["/openapi" {:get {:handler (openapi/create-openapi-handler)
                         :openapi {:openapi "3.1.0"
                                   :info {:title "Foo"}}
@@ -36,12 +43,12 @@
      ["/swagger.json" {:get {:handler (swagger/create-swagger-handler)
                              :no-doc true}}]]
 
-    {:data {:middleware [rrc/coerce-exceptions-middleware
+    {:data {:coercion (sut/realm-coercion ex/my-body-format)
+
+            :middleware [rrc/coerce-exceptions-middleware
                          rrc/coerce-request-middleware
-                         rrc/coerce-response-middleware]}})
-   #_(fn [req]
-       {:status 404
-        :body (str "URI: " (:uri req))})))
+                         rrc/coerce-response-middleware]}})))
+
 
 (t/deftest valid-request
   (t/is (= {:total 11}
@@ -105,17 +112,18 @@
   (t/is (= {:status 200,
             :body {:swagger "2.0",
                    :x-id :some-id
-                   ;; Note: swagger really has no schema for path parameters? I doubt it a bit.
                    :paths {"/api/plus/{bar}"
-                           {:post {:parameters [{:in :body, :name "body", :description "", :required true,
+                           {:post {:parameters [{:in "body", :name "body", :description "", :required true,
                                                  :schema {:type "object", :properties {:x {:type "integer"},
                                                                                        :y {:type "integer"}},
                                                           :required [:x :y], :closed false}}
-                                                {:in :query, :name :foo, :description "", :required true, :type "string" :pattern "[-]?[0-9]+"}
-                                                {:in :header, :name "my-header", :description "", :required false, :type "string" :pattern "[-]?[0-9]+"}]
+                                                {:in "path", :name :bar, :description "", :required true, :type "string" :pattern "[-]?[0-9]+"}
+                                                {:in "query", :name :foo, :description "", :required true, :type "string" :pattern "[-]?[0-9]+"}
+                                                {:in "header", :name "my-header", :description "", :required false, :type "string" :pattern "[-]?[0-9]+"}]
                                    :responses {200
                                                {:schema {:type "object", :properties {:total {:type "integer"}}, :required [:total], :closed false}}}}}},
                    :definitions {}}}
            (-> (app {:request-method :get
                      :uri "/swagger.json"})
                (assoc-in [:body :x-id] :some-id)))))
+
