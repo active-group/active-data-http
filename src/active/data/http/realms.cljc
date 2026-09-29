@@ -298,6 +298,7 @@
                (realm/restricted realm-inspection/map-of
                                  (fn [r]
                                    (and (or (realm-inspection/string? (realm-inspection/map-of-realm-key-realm r))
+                                            ;; aka when using 'keywordize keys':
                                             (realm-inspection/keyword? (realm-inspection/map-of-realm-key-realm r)))
                                         (realm/contains? @rec-var (realm-inspection/map-of-realm-value-realm r))))
                                  "map of json")

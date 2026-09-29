@@ -49,9 +49,6 @@
     ;; It may be true for some easier ones; it's definitely not true for cljs, which even adds '/.../' to it.
     {:type "string" :pattern (str (realms/string-pattern-realm? realm))}
 
-    (inspection/string? realm)
-    {:type "string"}
-
     (inspection/char? realm)
     {:type "string" :pattern "~c."}
 
@@ -68,6 +65,9 @@
 
     (realms/uuid-string-realm? realm)
     {:type "string", :format "uuid"}
+
+    (inspection/string? realm)
+    {:type "string"}
 
     (realms/transit-uuid-realm? realm)
     {:type "string", :pattern "~u[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"}
@@ -120,10 +120,18 @@
     {:type "array" :prefixItems [{:const "~#set"} {:type "array" :uniqueItems true :items (json-schema-from-realm* as-key? (inspection/set-of-realm-realm realm))}]}
 
     (inspection/map-of? realm)
-    {:type "array" :prefixItems [{:const "~#cmap"} {:type "array" :items
-                                                    ;; it's actually key, value, key, value... but I think json-schema cannot express that.
-                                                    {:anyOf [(json-schema-from-realm* true (inspection/map-of-realm-key-realm realm))
-                                                             (json-schema-from-realm* false (inspection/map-of-realm-value-realm realm))]}}]}
+    (let [key-realm (inspection/map-of-realm-key-realm realm)
+          value-realm (inspection/map-of-realm-value-realm realm)]
+      ;; if keys are strings, then it is represented as an ordinary object; also keywords for 'keywordize-keys'.
+      (if (or (inspection/string? key-realm)
+              (inspection/keyword? key-realm))
+        {:type "object"
+         :additionalProperties (json-schema-from-realm* as-key? value-realm)
+         :closed false}
+        {:type "array" :prefixItems [{:const "~#cmap"} {:type "array" :items
+                                                        ;; it's actually key, value, key, value... but I think json-schema cannot express that.
+                                                        {:anyOf [(json-schema-from-realm* true key-realm)
+                                                                 (json-schema-from-realm* false value-realm)]}}]}))
 
     (inspection/map-with-keys? realm) ;; only if keys are strings? (or keywords, as for 'keywordize-keys')?
     (let [pairs (inspection/map-with-keys-realm-map realm)
