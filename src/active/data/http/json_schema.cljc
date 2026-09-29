@@ -125,6 +125,7 @@
       ;; if keys are strings, then it is represented as an ordinary object; also keywords for 'keywordize-keys'.
       (if (or (inspection/string? key-realm)
               (inspection/keyword? key-realm))
+        ;; TODO: There's also ["^ ", ... ] for non-composite maps. Seems we have to separate Json and transit afterall.
         {:type "object"
          :additionalProperties (json-schema-from-realm* as-key? value-realm)
          :closed false}
