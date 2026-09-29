@@ -19,18 +19,19 @@
        ;; uuid as a string
        (realm-inspection/uuid? realm) common/uuid-string-formatter
 
-       ;; any (other) sequence as a vector
-       (and (realm-inspection/sequence-of? realm)
-            (not (realms/vector-of-realm? realm)))
-       (fn [resolve]
-         (let [it (resolve (realm-inspection/sequence-of-realm-realm realm))]
-           (translator/translator (fn from-extern [v]
-                                    (if (vector? v)
-                                      (mapv (translator/from-extern it) v)
-                                      (throw (translator/format-error "not a vector" v))))
-                                  (fn to-extern [v]
-                                    (mapv (translator/to-extern it) v))
-                                  (realms/vector-of (translator/external-realm it)))))
+       ;; ;; any (other) sequence as a vector
+       ;; ;; TODO: maybe set-of as vector too?
+       ;; (and (realm-inspection/sequence-of? realm)
+       ;;      (not (realms/vector-of-realm? realm)))
+       ;; (fn [resolve]
+       ;;   (let [it (resolve (realm-inspection/sequence-of-realm-realm realm))]
+       ;;     (translator/translator (fn from-extern [v]
+       ;;                              (if (vector? v)
+       ;;                                (mapv (translator/from-extern it) v)
+       ;;                                (throw (translator/format-error "not a vector" v))))
+       ;;                            (fn to-extern [v]
+       ;;                              (mapv (translator/to-extern it) v))
+       ;;                            (realms/vector-of (translator/external-realm it)))))
 
        :else nil))
    ;; '1:1' json
