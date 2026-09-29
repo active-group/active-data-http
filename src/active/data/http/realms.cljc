@@ -363,6 +363,12 @@
                realm-inspection/char
                ;; realm-inspection/rational is not supported, I think.
 
+               ;; lists and vectors, ie. all sequences.
+               (realm/restricted realm-inspection/sequence-of
+                                 (fn [r]
+                                   (realm/contains? @rec-var (realm-inspection/sequence-of-realm-realm r)))
+                                 "seq of transit")
+
                ;; map-with-keys and map-with-tag with any keys (unlike json, where keys have to be strings)
                (realm/restricted realm-inspection/map-with-keys
                                  (fn [r]
